@@ -1,0 +1,10 @@
+# @package _global_
+version_base: 0.01
+data:
+  externals: ../data/externals
+  raw: ../data/raw
+  processed: ../data/processed
+  final: ../data/final
+
+defaults:
+  - environment: specific_dataset
