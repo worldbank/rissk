@@ -6,5 +6,9 @@ data:
   processed: ../data/processed
   final: ../data/final
 
+surveys: [ifad_tunesia, census_rmi]
+survey_version: [EndlineFINALV5_1, EndlineFINALV106_1]
+
+
 defaults:
   - environment: specific_dataset
