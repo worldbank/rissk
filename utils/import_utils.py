@@ -82,8 +82,9 @@ def get_miocrodata(survey_path, df_questionnaires):
     # Manage the case questionaires are not available for the survey
     if df_questionnaires.empty is False:
         roster_columns = [c for c in combined_df.columns if '__id' in c and c != 'interview__id']
-        combined_df = combined_df.merge(combined_df, how='left', left_on='variable',
+        combined_df = combined_df.merge(df_questionnaires, how='left', left_on='variable',
                                 right_on='VariableName').sort_values(['interview__id', 'question_seq'] + roster_columns)
+
 
         # combined_df['type'], combined_df['question_scope'], combined_df['parent_group_title'] = zip(
         #     *combined_df['variable'].map(lambda x: question_mapping.get(x, ("Unknown", "Unknown", "Unknown")) if not pd.isnull(x) else ("Unknown", "Unknown", "Unknown")))
