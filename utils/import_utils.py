@@ -31,7 +31,141 @@ def get_file_parts(filename):
     return questionnaire, version, file_format, interview_status
 
 
-class SurveyImport:
+def load_dataframes(processed_data_path):
+
+    df_paradata = pd.read_csv(os.path.join(processed_data_path, 'paradata.csv'))
+    df_microdata = pd.read_csv(os.path.join(processed_data_path, 'microdata.csv'))
+    df_questionnaire = pd.read_csv(os.path.join(processed_data_path, 'questionnaire.csv'))
+
+    return df_paradata, df_questionnaire, df_microdata
+
+
+def save_dataframes(df_paradata, df_questionnaires, df_microdata, processed_data_path):
+
+    if not os.path.exists(processed_data_path):
+        os.makedirs(processed_data_path)
+
+    df_paradata.to_csv(os.path.join(processed_data_path, 'paradata.csv'), index = False)
+    df_questionnaires.to_csv(os.path.join(processed_data_path, 'questionnaire.csv'), index = False)
+    df_microdata.to_csv(os.path.join(processed_data_path, 'microdata.csv'), index = False)
+
+
+def get_data(survey_path):
+    df_questionnaires = get_questionaire(survey_path)
+    df_paradata = get_paradata(os.path.join(survey_path, 'paradata.tab'), df_questionnaires)
+    df_microdata = get_miocrodata(survey_path, df_questionnaires)
+    return df_paradata, df_questionnaires, df_microdata
+
+
+def get_miocrodata(survey_path, df_questionnaires):
+    # List of variables to exclude
+    drop_list = ['interview__key', 'sssys_irnd', 'has__errors', 'interview__status', 'assignment__id']
+
+    # List of file names
+    file_names = [file for file in os.listdir(survey_path) if
+                  file.endswith('.dta') and not file.startswith(('interview__', 'assignment__'))]
+    # Iterate over each file
+    all_dfs = []
+    for file_name in file_names:
+        df = pd.read_stata(os.path.join(survey_path, file_name), convert_categoricals=False)
+        df.drop(columns=[col for col in drop_list if col in df.columns], inplace=True)
+        id_vars = [col for col in df.columns if col.endswith("__id")]
+        value_vars = [col for col in df.columns if col not in id_vars]
+        df_long = df.melt(id_vars=id_vars, value_vars=value_vars, var_name='variable', value_name='value')
+        df_long['filename'] = file_name
+        all_dfs.append(df_long)
+    if len(all_dfs) > 0:
+
+        combined_df = pd.concat(all_dfs, ignore_index=True)
+    else:
+        combined_df = pd.DataFrame()
+    # Manage the case questionaires are not available for the survey
+    if df_questionnaires.empty is False:
+        roster_columns = [c for c in combined_df.columns if '__id' in c and c != 'interview__id']
+        combined_df = combined_df.merge(combined_df, how='left', left_on='variable',
+                                right_on='VariableName').sort_values(['interview__id', 'question_seq'] + roster_columns)
+
+        # combined_df['type'], combined_df['question_scope'], combined_df['parent_group_title'] = zip(
+        #     *combined_df['variable'].map(lambda x: question_mapping.get(x, ("Unknown", "Unknown", "Unknown")) if not pd.isnull(x) else ("Unknown", "Unknown", "Unknown")))
+    return combined_df
+
+
+def process_json_structure(children, parent_group_title, counter, question_data):
+    for child in children:
+        if "$type" in child:
+            question_data.append({
+                "question_seq": counter,
+                "VariableName": child.get("VariableName"),
+                "type": child["$type"],
+                "QuestionType": child.get("QuestionType"),
+                "Answers": child.get("Answers"),
+                "Children": child.get("Children"),
+                "ConditionExpression": child.get("ConditionExpression"),
+                "HideIfDisabled": child.get("HideIfDisabled"),
+                "Featured": child.get("Featured"),
+                "Instructions": child.get("Instructions"),
+                "Properties": child.get("Properties"),
+                "PublicKey": child.get("PublicKey"),
+                "QuestionScope": child.get("QuestionScope"),
+                "QuestionText": child.get("QuestionText"),
+                "StataExportCaption": child.get("StataExportCaption"),
+                "VariableLabel": child.get("VariableLabel"),
+                "IsTimestamp": child.get("IsTimestamp"),
+                "ValidationConditions": child.get("ValidationConditions"),
+                "YesNoView": child.get("YesNoView"),
+                "Title": child.get("Title"),
+                "IsRoster": child.get("IsRoster"),
+                "parents": parent_group_title
+            })
+            counter += 1
+
+        if "Children" in child:
+            child_group_title = child.get("Title", "")
+            counter = process_json_structure(child["Children"], parent_group_title + " > " + child_group_title, counter, question_data)
+
+    return counter
+
+
+def get_questionaire(survey_path):
+    qnr_df = pd.DataFrame()
+    questionaire_path = os.path.join(survey_path, 'Questionnaire/content/document.json')
+    if os.path.exists(questionaire_path):
+        with open(questionaire_path) as file:
+            json_data = json.load(file)
+
+        question_data = []
+        question_counter = 1
+
+        process_json_structure(json_data["Children"], "", question_counter, question_data)
+
+        qnr_df = pd.DataFrame(question_data)
+        qnr_df.loc[qnr_df['YesNoView'] == True, 'type'] = 'YesNoQuestion'  # create type for YesNoQuestions
+        qnr_df['parents'] = qnr_df['parents'].str.lstrip(' > ')
+        split_columns = qnr_df['parents'].str.split(' > ', expand=True)
+        split_columns.columns = [f"parent_{i + 1}" for i in range(split_columns.shape[1])]
+        qnr_df = pd.concat([qnr_df, split_columns], axis=1)
+    return qnr_df
+
+
+def get_paradata(para_path, df_questionnaires):
+    df_para = pd.read_csv(para_path, delimiter='\t')
+    df_para[['param', 'answer', 'roster_level']] = df_para['parameters'].str.split('\|\|', expand=True)  # split the parameter column
+    df_para['datetime_utc'] = pd.to_datetime(df_para['timestamp_utc'])  # generate date-time, TZ not yet considered
+
+    if df_questionnaires.empty is False:
+        df_para = df_para.merge(df_questionnaires, how='left', left_on='param', right_on='VariableName')
+    df_para['answer_changed'] = False
+    return df_para
+
+
+def set_survey_name_version(dfs, survey_name, survey_version):
+    for index, df in enumerate(dfs):
+        dfs[index]['survey_name'] = survey_name
+        dfs[index]['survey_version'] = survey_version
+    return dfs
+
+
+class SurveyManager:
     def __init__(self, config):
 
         # Extract attributes
@@ -112,105 +246,31 @@ class SurveyImport:
                     except:
                         pass
 
-    def make_dataframes(self, save_to_disk=True, reload=True):
-        survey_data_dict = {}
+    def get_dataframes(self, save_to_disk=True, reload=False):
+        dfs_paradata = []
+        dfs_questionnaires = []
+        dfs_microdata = []
         for survey_name, survey in self.file_dict.items():
             target_dir = os.path.join(self.config.data.raw, survey_name)
-            survey_data_dict[survey_name] = survey_data_dict.get(survey_name, {})
+
             for survey_version, files in survey.items():
                 survey_path = os.path.join(target_dir, survey_version)
                 processed_data_path = os.path.join(survey_path, 'processed_data')
                 if reload is False and os.path.isdir(processed_data_path):
-                    df_paradata, questionnaires, df_microdata = load_dataframes(processed_data_path)
+                    df_paradata, df_questionnaires, df_microdata = load_dataframes(processed_data_path)
                 else:
-                    df_paradata, questionnaires, df_microdata = get_data(survey_path)
+                    df_paradata, df_questionnaires, df_microdata = get_data(survey_path)
+                    df_paradata, df_questionnaires, df_microdata = set_survey_name_version([df_paradata, df_questionnaires, df_microdata], survey_name, survey_version)
                     if save_to_disk:
-                        save_dataframes(df_paradata, questionnaires, df_microdata, processed_data_path)
+                        save_dataframes(df_paradata, df_questionnaires, df_microdata, processed_data_path)
 
-                survey_data_dict[survey_name][survey_version] = {'paradata': df_paradata, 'questionnaire':questionnaires, 'microdata':df_microdata}
-        return survey_data_dict
+                dfs_paradata.append(df_paradata)
+                dfs_questionnaires.append(df_questionnaires)
+                dfs_microdata.append(df_microdata)
 
+        # create unique dataframe with all surveys
+        dfs_paradata = pd.concat(dfs_paradata)
+        dfs_questionnaires = pd.concat(dfs_questionnaires)
+        dfs_microdata = pd.concat(dfs_microdata)
 
-
-def load_dataframes(processed_data_path):
-
-    df_paradata = pd.read_csv(os.path.join(processed_data_path,'paradata.csv'))
-    df_microdata = pd.read_csv(os.path.join(processed_data_path,'microdata.csv'))
-    json_path = os.path.join(processed_data_path,'questionnaire.json')
-    with open(json_path, 'r') as file:
-        questionnaires = json.load(file)
-    return df_paradata, questionnaires, df_microdata
-
-
-def save_dataframes(df_paradata, questionnaires, df_microdata, processed_data_path):
-    if not os.path.exists(processed_data_path):
-        os.makedirs(processed_data_path)
-
-    df_paradata.to_csv(os.path.join(processed_data_path,'paradata.csv'), index = False)
-    df_microdata.to_csv(os.path.join(processed_data_path,'microdata.csv'), index = False)
-    json_path = os.path.join(processed_data_path,'questionnaire.json')
-    with open(json_path,'w') as f:
-        json.dump(questionnaires, f)
-def get_data(survey_path):
-    questionnaires = get_questionaire(survey_path)
-    df_paradata = get_paradata(os.path.join(survey_path, 'paradata.tab'), questionnaires)
-    df_microdata = get_miocrodata(survey_path, questionnaires)
-    return df_paradata, questionnaires, df_microdata
-
-def get_miocrodata(survey_path, question_mapping):
-    # List of variables to exclude
-    drop_list = ['interview__key', 'sssys_irnd', 'has__errors', 'interview__status', 'assignment__id']
-
-    # List of file names
-    file_names = [file for file in os.listdir(survey_path) if
-                  file.endswith('.dta') and not file.startswith(('interview__', 'assignment__'))]
-    # Iterate over each file
-    all_dfs = []
-    for file_name in file_names:
-        df = pd.read_stata(os.path.join(survey_path, file_name), convert_categoricals=False)
-        df.drop(columns=[col for col in drop_list if col in df.columns], inplace=True)
-        id_vars = [col for col in df.columns if col.endswith("__id")]
-        value_vars = [col for col in df.columns if col not in id_vars]
-        df_long = df.melt(id_vars=id_vars, value_vars=value_vars, var_name='variable', value_name='value')
-        df_long['filename'] = file_name
-        all_dfs.append(df_long)
-
-    combined_df = pd.concat(all_dfs, ignore_index=True)
-    combined_df['type'], combined_df['question_scope'], combined_df['parent_group_title'] = zip(
-        *combined_df['variable'].map(lambda x: question_mapping.get(x, ("Unknown", "Unknown", "Unknown")) if not pd.isnull(x) else ("Unknown", "Unknown", "Unknown")))
-    return combined_df
-
-def get_questionaire(survey_path):
-    # create a mapping of VariableName to $type
-    json_path = os.path.join(survey_path, 'Questionnaire/content/document.json')
-    with open(json_path, 'r') as file:
-        json_data = json.load(file)
-
-        # Preprocess the JSON structure to create a mapping of VariableName to ($type, QuestionScope, ParentGroupTitle)
-        question_mapping = {}
-
-
-        def process_json_structure(children, parent_group_title):
-            for child in children:
-                if "$type" in child:
-                    variable_name = child.get("VariableName")
-                    type_value = child["$type"]
-                    question_scope = child.get("QuestionScope")
-                    question_mapping[variable_name] = (type_value, question_scope, parent_group_title)
-
-                if "Children" in child:
-                    child_group_title = child.get("Title", "")
-                    process_json_structure(child["Children"], parent_group_title + " > " + child_group_title)
-
-        process_json_structure(json_data["Children"], "")
-    return question_mapping
-
-
-def get_paradata(para_path, type_mapping):
-    df_para = pd.read_csv(para_path, delimiter='\t')
-    df_para[['param', 'answer', 'roster_level']] = df_para['parameters'].str.split('\|\|', expand=True)  # split the parameter column
-    df_para['datetime_utc'] = pd.to_datetime(df_para['timestamp_utc'])  # generate date-time, TZ not yet considered
-    df_para['type'] = df_para['param'].map(type_mapping)
-    df_para['answer_changed'] = False
-    return df_para
-
+        return dfs_paradata, dfs_questionnaires, dfs_microdata
