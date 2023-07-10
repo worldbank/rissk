@@ -143,9 +143,8 @@ def get_questionaire(survey_path):
         process_json_structure(json_data["Children"], "", question_counter, question_data)
 
         qnr_df = pd.DataFrame(question_data)
-        qnr_df.loc[qnr_df['YesNoView'] == True, 'type'] = 'YesNoQuestion'  # create type for YesNoQuestions
         qnr_df['answer_sequence'] = qnr_df['Answers'].apply(
-            lambda x: [item['AnswerValue'] for item in x] if x else np.nan)
+            lambda x: [int(item['AnswerValue']) for item in x] if x else np.nan)
         qnr_df['n_answers'] = qnr_df['Answers'].apply(lambda x: len(x) if x else np.nan)
         qnr_df['parents'] = qnr_df['parents'].str.lstrip(' > ')
         split_columns = qnr_df['parents'].str.split(' > ', expand=True)
