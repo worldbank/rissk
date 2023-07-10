@@ -1,6 +1,7 @@
 import os
 import json
 import pandas as pd
+import numpy as np
 import os
 import shutil
 import zipfile
@@ -114,6 +115,8 @@ def process_json_structure(children, parent_group_title, counter, question_data)
                 "IsTimestamp": child.get("IsTimestamp"),
                 "ValidationConditions": child.get("ValidationConditions"),
                 "YesNoView": child.get("YesNoView"),
+                "IsFilteredCombobox": child.get("IsFilteredCombobox"),
+                "IsInteger": child.get("IsInteger"),
                 "Title": child.get("Title"),
                 "IsRoster": child.get("IsRoster"),
                 "parents": parent_group_title
@@ -141,6 +144,9 @@ def get_questionaire(survey_path):
 
         qnr_df = pd.DataFrame(question_data)
         qnr_df.loc[qnr_df['YesNoView'] == True, 'type'] = 'YesNoQuestion'  # create type for YesNoQuestions
+        qnr_df['answer_sequence'] = qnr_df['Answers'].apply(
+            lambda x: [item['AnswerValue'] for item in x] if x else np.nan)
+        qnr_df['n_answers'] = qnr_df['Answers'].apply(lambda x: len(x) if x else np.nan)
         qnr_df['parents'] = qnr_df['parents'].str.lstrip(' > ')
         split_columns = qnr_df['parents'].str.split(' > ', expand=True)
         split_columns.columns = [f"parent_{i + 1}" for i in range(split_columns.shape[1])]
