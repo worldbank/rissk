@@ -33,7 +33,6 @@ def get_file_parts(filename):
 
 
 def load_dataframes(processed_data_path):
-
     df_paradata = pd.read_csv(os.path.join(processed_data_path, 'paradata.csv'))
     df_microdata = pd.read_csv(os.path.join(processed_data_path, 'microdata.csv'))
     df_questionnaire = pd.read_csv(os.path.join(processed_data_path, 'questionnaire.csv'))
@@ -42,34 +41,83 @@ def load_dataframes(processed_data_path):
 
 
 def save_dataframes(df_paradata, df_questionnaires, df_microdata, processed_data_path):
-
     if not os.path.exists(processed_data_path):
         os.makedirs(processed_data_path)
 
-    df_paradata.to_csv(os.path.join(processed_data_path, 'paradata.csv'), index = False)
-    df_questionnaires.to_csv(os.path.join(processed_data_path, 'questionnaire.csv'), index = False)
-    df_microdata.to_csv(os.path.join(processed_data_path, 'microdata.csv'), index = False)
+    df_paradata.to_csv(os.path.join(processed_data_path, 'paradata.csv'), index=False)
+    df_questionnaires.to_csv(os.path.join(processed_data_path, 'questionnaire.csv'), index=False)
+    df_microdata.to_csv(os.path.join(processed_data_path, 'microdata.csv'), index=False)
 
 
 def get_data(survey_path):
     df_questionnaires = get_questionaire(survey_path)
     df_paradata = get_paradata(os.path.join(survey_path, 'paradata.tab'), df_questionnaires)
-    df_microdata = get_miocrodata(survey_path, df_questionnaires)
+    df_microdata = get_microdata(survey_path, df_questionnaires)
     return df_paradata, df_questionnaires, df_microdata
 
 
-def get_miocrodata(survey_path, df_questionnaires):
+def transform_multi(df, variable_list, transformation_type):
+    if transformation_type not in ['unlinked', 'linked', 'list']:
+        raise ValueError("transformation_type must be either 'unlinked', 'linked', or 'list'")
+
+    transformed_df = pd.DataFrame(index=df.index)  # DataFrame for storing transformations
+
+    for var in variable_list:
+        related_cols = [col for col in df.columns if col.startswith(f"{var}__")]
+
+        if related_cols:
+            transformation = [[] for _ in range(len(df))]
+
+            for col in related_cols:
+                if transformation_type == 'unlinked':
+                    suffix = int(col.split('__')[1])
+                    mask = df[col] == 1
+                    transformation = [x + [suffix] if mask.iloc[i] else x for i, x in enumerate(transformation)]
+                elif transformation_type == 'linked':
+                    mask = df[col].notna()
+                    transformation = [x + [df.at[i, col]] if mask.iloc[i] else x for i, x in enumerate(transformation)]
+                elif transformation_type == 'list':
+                    mask = (df[col]!='##N/A##') & (df[col]!='')
+                    transformation = [x + [df.at[i, col]] if mask.iloc[i] else x for i, x in enumerate(transformation)]
+
+            transformation = [x if x else float('nan') for x in transformation]
+            transformed_df[var] = transformation # Add the transformation to the transformed DataFrame
+            df = df.drop(related_cols, axis=1)  # Drop the original columns
+
+    df = pd.concat([df, transformed_df], axis=1) # Concatenate the original DataFrame with the transformations
+
+    return df
+
+
+def get_microdata(survey_path, df_questionnaires):
     # List of variables to exclude
     drop_list = ['interview__key', 'sssys_irnd', 'has__errors', 'interview__status', 'assignment__id']
 
     # List of file names
     file_names = [file for file in os.listdir(survey_path) if
                   file.endswith('.dta') and not file.startswith(('interview__', 'assignment__'))]
+
+    # define multi/list question conditions
+    unlinked_mask = (df_questionnaires['type'] == 'MultyOptionsQuestion') & (df_questionnaires['is_linked'] == False)
+    linked_mask = (df_questionnaires['type'] == 'MultyOptionsQuestion') & (df_questionnaires['is_linked'] == True)
+    list_mask = (df_questionnaires['type'] == 'TextListQuestion')
+
+    # extract multi/list question lists from conditions
+    multi_unlinked_vars = df_questionnaires.loc[unlinked_mask, 'VariableName'].tolist()
+    multi_linked_vars = df_questionnaires.loc[linked_mask, 'VariableName'].tolist()
+    list_vars = df_questionnaires.loc[list_mask, 'VariableName'].tolist()
+
     # Iterate over each file
     all_dfs = []
     for file_name in file_names:
         df = pd.read_stata(os.path.join(survey_path, file_name), convert_categoricals=False)
         df.drop(columns=[col for col in drop_list if col in df.columns], inplace=True)
+
+        # transform multi/list questions
+        df = transform_multi(df, multi_unlinked_vars, 'unlinked')
+        df = transform_multi(df, multi_linked_vars, 'linked')
+        df = transform_multi(df, list_vars, 'list')
+
         id_vars = [col for col in df.columns if col.endswith("__id")]
         value_vars = [col for col in df.columns if col not in id_vars]
         df_long = df.melt(id_vars=id_vars, value_vars=value_vars, var_name='variable', value_name='value')
@@ -84,8 +132,8 @@ def get_miocrodata(survey_path, df_questionnaires):
     if df_questionnaires.empty is False:
         roster_columns = [c for c in combined_df.columns if '__id' in c and c != 'interview__id']
         combined_df = combined_df.merge(df_questionnaires, how='left', left_on='variable',
-                                right_on='VariableName').sort_values(['interview__id', 'question_seq'] + roster_columns)
-
+                                        right_on='VariableName').sort_values(
+            ['interview__id', 'question_seq'] + roster_columns)
 
         # combined_df['type'], combined_df['question_scope'], combined_df['parent_group_title'] = zip(
         #     *combined_df['variable'].map(lambda x: question_mapping.get(x, ("Unknown", "Unknown", "Unknown")) if not pd.isnull(x) else ("Unknown", "Unknown", "Unknown")))
@@ -117,17 +165,33 @@ def process_json_structure(children, parent_group_title, counter, question_data)
                 "YesNoView": child.get("YesNoView"),
                 "IsFilteredCombobox": child.get("IsFilteredCombobox"),
                 "IsInteger": child.get("IsInteger"),
+                "CategoriesId": child.get("CategoriesId"),
                 "Title": child.get("Title"),
                 "IsRoster": child.get("IsRoster"),
+                "LinkedToRosterId": child.get("LinkedToRosterId"),
+                "LinkedToQuestionId": child.get("LinkedToQuestionId"),
                 "parents": parent_group_title
             })
             counter += 1
 
         if "Children" in child:
             child_group_title = child.get("Title", "")
-            counter = process_json_structure(child["Children"], parent_group_title + " > " + child_group_title, counter, question_data)
+            counter = process_json_structure(child["Children"], parent_group_title + " > " + child_group_title, counter,
+                                             question_data)
 
     return counter
+
+
+def process_categories(directory):
+    categories = {}
+    files = [f for f in os.listdir(directory) if f.endswith('.xlsx') or f.endswith('.xls')]
+    for file in files:
+        file_path = os.path.join(directory, file)
+        df = pd.read_excel(file_path)
+        n_answers = df.shape[0]
+        answer_sequence = df['id'].tolist()
+        categories[file] = {'n_answers': n_answers, 'answer_sequence': answer_sequence}
+    return categories
 
 
 def get_questionaire(survey_path):
@@ -146,16 +210,30 @@ def get_questionaire(survey_path):
         qnr_df['answer_sequence'] = qnr_df['Answers'].apply(
             lambda x: [int(item['AnswerValue']) for item in x] if x else np.nan)
         qnr_df['n_answers'] = qnr_df['Answers'].apply(lambda x: len(x) if x else np.nan)
+        qnr_df['is_linked'] = (qnr_df['LinkedToRosterId'].notna()) | (qnr_df['LinkedToQuestionId'].notna())
         qnr_df['parents'] = qnr_df['parents'].str.lstrip(' > ')
         split_columns = qnr_df['parents'].str.split(' > ', expand=True)
         split_columns.columns = [f"parent_{i + 1}" for i in range(split_columns.shape[1])]
         qnr_df = pd.concat([qnr_df, split_columns], axis=1)
+    categories_path = os.path.join(survey_path, 'Questionnaire/content/Categories')
+    if os.path.exists(categories_path):
+        categories = process_categories(categories_path)
+
+        def update_row(row):
+            if row['CategoriesId'] in categories:
+                row['n_answers'] = categories[row['CategoriesId']]['n_answers']
+                row['answer_sequence'] = categories[row['CategoriesId']]['answer_sequence']
+            return row
+
+        qnr_df = qnr_df.apply(update_row, axis=1)
+
     return qnr_df
 
 
 def get_paradata(para_path, df_questionnaires):
     df_para = pd.read_csv(para_path, delimiter='\t')
-    df_para[['param', 'answer', 'roster_level']] = df_para['parameters'].str.split('\|\|', expand=True)  # split the parameter column
+    df_para[['param', 'answer', 'roster_level']] = df_para['parameters'].str.split('\|\|',
+                                                                                   expand=True)  # split the parameter column
     df_para['datetime_utc'] = pd.to_datetime(df_para['timestamp_utc'])  # generate date-time, TZ not yet considered
 
     if df_questionnaires.empty is False:
@@ -198,7 +276,8 @@ class SurveyManager:
                         try:
                             questionnaire, version, file_format, interview_status = get_file_parts(filename)
                             q_name = f"{questionnaire}_{str(version)}"
-                            self.file_dict[survey_name][q_name] = self.file_dict[survey_name].get(q_name, {'file_path': survey_path})
+                            self.file_dict[survey_name][q_name] = self.file_dict[survey_name].get(q_name, {
+                                'file_path': survey_path})
                             self.file_dict[survey_name][q_name][file_format] = filename
                         except:
                             print(f"WARNING: Survey {survey_name} with version filename {filename} Skipped")
@@ -208,9 +287,10 @@ class SurveyManager:
     def get_survey_version(self):
         self.get_files()
         if self.config.surveys != 'all':
-            self.file_dict = {survey: survey_data for survey, survey_data in self.file_dict.items() if survey in self.config.surveys}
+            self.file_dict = {survey: survey_data for survey, survey_data in self.file_dict.items() if
+                              survey in self.config.surveys}
 
-    def extract(self,  overwrite_dir=False):
+    def extract(self, overwrite_dir=False):
         for survey_name, survey in self.file_dict.items():
             target_dir = os.path.join(self.config.data.raw, survey_name)
             if overwrite_dir and os.path.exists(target_dir):
@@ -266,7 +346,8 @@ class SurveyManager:
                     df_paradata, df_questionnaires, df_microdata = load_dataframes(processed_data_path)
                 else:
                     df_paradata, df_questionnaires, df_microdata = get_data(survey_path)
-                    df_paradata, df_questionnaires, df_microdata = set_survey_name_version([df_paradata, df_questionnaires, df_microdata], survey_name, survey_version)
+                    df_paradata, df_questionnaires, df_microdata = set_survey_name_version(
+                        [df_paradata, df_questionnaires, df_microdata], survey_name, survey_version)
                     if save_to_disk:
                         save_dataframes(df_paradata, df_questionnaires, df_microdata, processed_data_path)
 
