@@ -63,6 +63,9 @@ def transform_multi(df, variable_list, transformation_type):
     transformed_df = pd.DataFrame(index=df.index)  # DataFrame for storing transformations
 
     for var in variable_list:
+        if var in df.columns:
+            df = df.drop(var, axis=1)  # Drop the target column, should it exists (only text list question on linked roster)
+
         related_cols = [col for col in df.columns if col.startswith(f"{var}__")]
 
         if related_cols:
@@ -71,7 +74,7 @@ def transform_multi(df, variable_list, transformation_type):
             for col in related_cols:
                 if transformation_type == 'unlinked':
                     suffix = int(col.split('__')[1])
-                    mask = df[col] == 1
+                    mask = df[col] > 0
                     transformation = [x + [suffix] if mask.iloc[i] else x for i, x in enumerate(transformation)]
                 elif transformation_type == 'linked':
                     mask = df[col].notna()
@@ -118,7 +121,14 @@ def get_microdata(survey_path, df_questionnaires):
         df = transform_multi(df, multi_linked_vars, 'linked')
         df = transform_multi(df, list_vars, 'list')
 
-        id_vars = [col for col in df.columns if col.endswith("__id")]
+        # create roster_level from __id columns
+        id_vars = ['interview__id']
+        roster_ids = [col for col in df.columns if col.endswith("__id") and col != "interview__id"]
+        if roster_ids:
+            df['roster_level'] = df[roster_ids].apply(lambda row: ",".join(map(str, row)), axis=1)
+            df.drop(columns=roster_ids, inplace=True)
+            id_vars = id_vars + ['roster_level']
+
         value_vars = [col for col in df.columns if col not in id_vars]
         df_long = df.melt(id_vars=id_vars, value_vars=value_vars, var_name='variable', value_name='value')
         df_long['filename'] = file_name
