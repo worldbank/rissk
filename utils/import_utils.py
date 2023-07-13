@@ -121,14 +121,15 @@ def get_microdata(survey_path, df_questionnaires):
         df = transform_multi(df, multi_linked_vars, 'linked')
         df = transform_multi(df, list_vars, 'list')
 
-        # create roster_level from __id columns
-        id_vars = ['interview__id']
+        # create roster_level from __id columns if on roster level, else '' if main questionnaire file
         roster_ids = [col for col in df.columns if col.endswith("__id") and col != "interview__id"]
         if roster_ids:
             df['roster_level'] = df[roster_ids].apply(lambda row: ",".join(map(str, row)), axis=1)
             df.drop(columns=roster_ids, inplace=True)
-            id_vars = id_vars + ['roster_level']
+        else:
+            df['roster_level'] = ''
 
+        id_vars = ['interview__id', 'roster_level']
         value_vars = [col for col in df.columns if col not in id_vars]
         df_long = df.melt(id_vars=id_vars, value_vars=value_vars, var_name='variable', value_name='value')
         df_long['filename'] = file_name
@@ -244,6 +245,7 @@ def get_paradata(para_path, df_questionnaires):
     df_para = pd.read_csv(para_path, delimiter='\t')
     df_para[['param', 'answer', 'roster_level']] = df_para['parameters'].str.split('\|\|',
                                                                                    expand=True)  # split the parameter column
+    df_para['roster_level'] = df_para['roster_level'].str.replace("|", "")  # if yes/no questions are answered with yes for the first time, "|" will appear in roster
     df_para['datetime_utc'] = pd.to_datetime(df_para['timestamp_utc'])  # generate date-time, TZ not yet considered
 
     if df_questionnaires.empty is False:
