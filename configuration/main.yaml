@@ -7,7 +7,7 @@ data:
   final: ../data/final
 
 surveys: [ifad_tunesia]
-survey_version: [EndlineFINALV106_1]
+survey_version: [EndlineFINALV5_1, EndlineFINALV106_1]
 
 defaults:
   - environment: specific_dataset
