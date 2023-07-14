@@ -57,8 +57,8 @@ def get_data(survey_path):
 
 
 def transform_multi(df, variable_list, transformation_type):
-    if transformation_type not in ['unlinked', 'linked', 'list']:
-        raise ValueError("transformation_type must be either 'unlinked', 'linked', or 'list'")
+    if transformation_type not in ['unlinked', 'linked', 'list', 'gps']:
+        raise ValueError("transformation_type must be either 'unlinked', 'linked', 'list', or 'gps'")
 
     transformed_df = pd.DataFrame(index=df.index)  # DataFrame for storing transformations
 
@@ -69,7 +69,7 @@ def transform_multi(df, variable_list, transformation_type):
         related_cols = [col for col in df.columns if col.startswith(f"{var}__")]
 
         if related_cols:
-            transformation = [[] for _ in range(len(df))]
+            transformation = [[] for _ in range(len(df))] if transformation_type != 'gps' else ['' for _ in range(len(df))]
 
             for col in related_cols:
                 if transformation_type == 'unlinked':
@@ -82,8 +82,10 @@ def transform_multi(df, variable_list, transformation_type):
                 elif transformation_type == 'list':
                     mask = (df[col]!='##N/A##') & (df[col]!='')
                     transformation = [x + [df.at[i, col]] if mask.iloc[i] else x for i, x in enumerate(transformation)]
+                elif transformation_type == 'gps':
+                    transformation = [x + (',' if x else '') + (str(df.at[i, col]) if pd.notna(df.at[i, col]) and df.at[i, col] != '##N/A##' else '') for i, x in enumerate(transformation)]
 
-            transformation = [x if x else float('nan') for x in transformation]
+            transformation = [x if x else float('nan') for x in transformation] if transformation_type != 'gps' else [x if x else '' for x in transformation]
             transformed_df[var] = transformation # Add the transformation to the transformed DataFrame
             df = df.drop(related_cols, axis=1)  # Drop the original columns
 
@@ -104,11 +106,13 @@ def get_microdata(survey_path, df_questionnaires):
     unlinked_mask = (df_questionnaires['type'] == 'MultyOptionsQuestion') & (df_questionnaires['is_linked'] == False)
     linked_mask = (df_questionnaires['type'] == 'MultyOptionsQuestion') & (df_questionnaires['is_linked'] == True)
     list_mask = (df_questionnaires['type'] == 'TextListQuestion')
+    gps_mask = (df_questionnaires['type'] == 'GpsCoordinateQuestion')
 
     # extract multi/list question lists from conditions
     multi_unlinked_vars = df_questionnaires.loc[unlinked_mask, 'VariableName'].tolist()
     multi_linked_vars = df_questionnaires.loc[linked_mask, 'VariableName'].tolist()
     list_vars = df_questionnaires.loc[list_mask, 'VariableName'].tolist()
+    gps_vars = df_questionnaires.loc[gps_mask, 'VariableName'].tolist()
 
     # Iterate over each file
     all_dfs = []
@@ -120,6 +124,7 @@ def get_microdata(survey_path, df_questionnaires):
         df = transform_multi(df, multi_unlinked_vars, 'unlinked')
         df = transform_multi(df, multi_linked_vars, 'linked')
         df = transform_multi(df, list_vars, 'list')
+        df = transform_multi(df, gps_vars, 'gps')
 
         # create roster_level from __id columns if on roster level, else '' if main questionnaire file
         roster_ids = [col for col in df.columns if col.endswith("__id") and col != "interview__id"]
