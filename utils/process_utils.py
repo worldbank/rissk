@@ -10,7 +10,7 @@ import hydra
 
 class DataProcessing:
 
-    def __int__(self, paradata, microdata, questionaire, config):
+    def __init__(self, paradata, microdata, questionaire, config):
         self._df_paradata = paradata
         self._df_microdata = microdata
         self._df_questionaire = questionaire
@@ -34,9 +34,51 @@ class DataProcessing:
 
 
 class ParaDataProcessing(DataProcessing):
+
+    def __init__(self, paradata, microdata, questionnaire, config, new_var):
+        super().__init__(paradata, microdata, questionnaire, config)
+
+        self.df_active_paradata = self.get_df_active_paradata()
+        self._new_var = new_var
+
     group_columns = ['interview__id', 'param', 'roster_level']
 
     time_group_columns = ['interview__id', 'variable_name', 'roster_level']
+
+    def get_df_active_paradata(self):
+        # generate df with active events done by interviewer prior to rejection/review
+
+        vars_needed = ['interview__id', 'order', 'event', 'responsible', 'role', 'tz_offset', 'param', 'answer',
+                       'roster_level', 'datetime_utc', 'variable_name', 'question_seq', 'type', 'question_type',
+                       'survey_name', 'survey_version']
+        df_active = self._df_paradata[vars_needed].copy().sort_values(['interview__id', 'order']).reset_index()
+
+        # only keep events done by interview (in most cases this should be all,
+        # after above filters, just in case supervisor or HQ answered something while interviewer answered on web mode)
+        df_active = df_active[df_active['role'] == 1]
+        # TODO, remove hidden questions
+
+        # streamline missing (empty, NaN) to '', important to identify duplicates in terms of roster below
+        df_active.fillna('', inplace=True)
+
+        # only keep interviewing events prior to Supervisor/HQ interaction
+        events_split = ['RejectedBySupervisor', 'OpenedBySupervisor', 'OpenedByHQ', 'RejectedByHQ']
+        grouped = df_active.groupby('interview__id')
+        df_active['interviewing'] = False
+        for _, group_df in grouped:
+            matching_events = group_df['event'].isin(events_split)
+            if matching_events.any():
+                first_reject_index = matching_events.idxmax() - 1
+                min_index = group_df.index.min()
+                df_active.loc[min_index:first_reject_index, 'interviewing'] = True
+        df_active = df_active[df_active['interviewing']]
+        df_active = df_active.drop(columns=['interviewing'])
+
+        # only keep active events
+        events_to_keep = ['interview_created', 'AnswerSet', 'Resumed', 'AnswerRemoved', 'CommentSet', 'Restarted']
+        df_active = df_active[df_active['event'].isin(events_to_keep)]
+        return df_active.copy()
+
 
     def add_list_question(self):
         self._df_paradata['answer_changed'] = False

@@ -1,4 +1,3 @@
-import os
 import json
 import pandas as pd
 import numpy as np
@@ -48,7 +47,7 @@ def save_dataframes(df_paradata, df_questionnaires, df_microdata, processed_data
     df_microdata.to_csv(os.path.join(processed_data_path, 'microdata.csv'), index=False)
 
 
-def get_data(survey_path):
+def get_data(survey_path, survey_name, survey_version):
     """
     This function wraps up the entire process of data extraction from the survey files.
     It calls the get_questionaire, get_paradata, and get_microdata functions in sequence,
@@ -62,9 +61,9 @@ def get_data(survey_path):
     df_questionnaires (DataFrame): DataFrame containing information about the questionnaire used for the survey.
     df_microdata (DataFrame): The DataFrame containing all the microdata (survey responses).
     """
-    df_questionnaires = get_questionaire(survey_path)
-    df_paradata = get_paradata(os.path.join(survey_path, 'paradata.tab'), df_questionnaires)
-    df_microdata = get_microdata(survey_path, df_questionnaires)
+    df_questionnaires = get_questionaire(survey_path, survey_name, survey_version)
+    df_paradata = get_paradata(survey_path, df_questionnaires, survey_name, survey_version)
+    df_microdata = get_microdata(survey_path, df_questionnaires, survey_name, survey_version)
 
     return df_paradata, df_questionnaires, df_microdata
 
@@ -94,12 +93,15 @@ def transform_multi(df, variable_list, transformation_type):
 
     for var in variable_list:
         if var in df.columns:
-            df = df.drop(var, axis=1)  # Drop the target column, should it exists (only text list question on linked roster)
+            # Drop the target column, should it exists (only text list question on linked roster)
+            df = df.drop(var, axis=1)
 
         related_cols = [col for col in df.columns if col.startswith(f"{var}__")]
 
         if related_cols:
-            transformation = [[] for _ in range(len(df))] if transformation_type != 'gps' else ['' for _ in range(len(df))]
+            transformation = [[] for _ in range(len(df))] \
+                if transformation_type != 'gps' \
+                else ['' for _ in range(len(df))]
 
             for col in related_cols:
                 if transformation_type == 'unlinked':
@@ -110,21 +112,25 @@ def transform_multi(df, variable_list, transformation_type):
                     mask = df[col].notna()
                     transformation = [x + [df.at[i, col]] if mask.iloc[i] else x for i, x in enumerate(transformation)]
                 elif transformation_type == 'list':
-                    mask = (df[col]!='##N/A##') & (df[col] != '')
+                    mask = (df[col] != '##N/A##') & (df[col] != '')
                     transformation = [x + [df.at[i, col]] if mask.iloc[i] else x for i, x in enumerate(transformation)]
                 elif transformation_type == 'gps':
-                    transformation = [x + (',' if x else '') + (str(df.at[i, col]) if pd.notna(df.at[i, col]) and df.at[i, col] != '##N/A##' else '') for i, x in enumerate(transformation)]
+                    transformation = [x + (',' if x else '') + (str(df.at[i, col])
+                                                                if pd.notna(df.at[i, col])
+                                                                   and df.at[i, col] != '##N/A##'
+                                                                else '') for i, x in enumerate(transformation)]
 
-            transformation = [x if x else float('nan') for x in transformation] if transformation_type != 'gps' else [x if x else '' for x in transformation]
-            transformed_df[var] = transformation # Add the transformation to the transformed DataFrame
+            transformation = [x if x else float('nan') for x in transformation] if transformation_type != 'gps' else [
+                x if x else '' for x in transformation]
+            transformed_df[var] = transformation  # Add the transformation to the transformed DataFrame
             df = df.drop(related_cols, axis=1)  # Drop the original columns
 
-    df = pd.concat([df, transformed_df], axis=1) # Concatenate the original DataFrame with the transformations
+    df = pd.concat([df, transformed_df], axis=1)  # Concatenate the original DataFrame with the transformations
 
     return df.copy()
 
 
-def get_microdata(survey_path, df_questionnaires):
+def get_microdata(survey_path, df_questionnaires, survey_name, survey_version):
     """
     This function loads microdata from .dta files in the specified directory and reshapes it into a long format. It also
     applies a number of transformations to handle multi-options, list, and GPS coordinates questions.
@@ -185,12 +191,15 @@ def get_microdata(survey_path, df_questionnaires):
         combined_df = pd.concat(all_dfs, ignore_index=True)
     else:
         combined_df = pd.DataFrame()
+
+    combined_df = set_survey_name_version(combined_df, survey_name, survey_version)
     # Manage the case questionnaires are not available for the survey
     if df_questionnaires.empty is False:
         roster_columns = [c for c in combined_df.columns if '__id' in c and c != 'interview__id']
         print(survey_path)
-        combined_df = combined_df.merge(df_questionnaires, how='left', left_on='variable',
-                                        right_on='variable_name').sort_values(
+        combined_df = combined_df.merge(df_questionnaires, how='left',
+                                        left_on=['variable', 'survey_name', 'survey_version'],
+                                        right_on=['variable_name', 'survey_name', 'survey_version']).sort_values(
             ['interview__id', 'question_seq'] + roster_columns)
 
     combined_df.reset_index(drop=True, inplace=True)
@@ -297,7 +306,7 @@ def update_df_categories(row, categories):
     return row
 
 
-def get_questionaire(survey_path):
+def get_questionaire(survey_path, survey_name, survey_version):
     """
     This function loads and processes a questionnaire from a JSON file located at the specified path.
     It also handles the categorization of the data.
@@ -316,7 +325,7 @@ def get_questionaire(survey_path):
             json_data = json.load(file)
 
         question_data = []
-        question_counter = 1
+        question_counter = 0
 
         process_json_structure(json_data["Children"], "", question_counter, question_data)
 
@@ -333,15 +342,16 @@ def get_questionaire(survey_path):
     if os.path.exists(categories_path):
         categories = get_categories(categories_path)
 
-        qnr_df = qnr_df.apply(lambda row: update_df_categories(row,categories), axis=1)
+        qnr_df = qnr_df.apply(lambda row: update_df_categories(row, categories), axis=1)
 
     qnr_df.reset_index(drop=True, inplace=True)
     # Normalize columns
     qnr_df.columns = [normalize_column_name(c) for c in qnr_df.columns]
+    qnr_df = set_survey_name_version(qnr_df, survey_name, survey_version)
     return qnr_df
 
 
-def get_paradata(para_path, df_questionnaires):
+def get_paradata(survey_path, df_questionnaires, survey_name, survey_version):
     """
     This function loads and processes a paradata file from the provided path and merges it with the questionnaire dataframe.
     The function also generates a date-time column from the timestamp and marks whether the answer has changed.
@@ -354,36 +364,40 @@ def get_paradata(para_path, df_questionnaires):
     df_para (DataFrame): A processed DataFrame containing the merged data from the paradata file and the questionnaire DataFrame.
 
     """
+    para_path = os.path.join(survey_path, 'paradata.tab')
     df_para = pd.read_csv(para_path, delimiter='\t')
-    df_para[['param', 'answer', 'roster_level']] = df_para['parameters'].str.split( '\|\|', expand=True)  # split the parameter column
-    df_para['roster_level'] = df_para['roster_level'].str.replace("|", "")  # if yes/no questions are answered with yes for the first time, "|" will appear in roster
+    df_para[['param', 'answer', 'roster_level']] = df_para['parameters'].str.split('\|\|',
+                                                                                   expand=True)  # split the parameter column
+    df_para['roster_level'] = df_para['roster_level'].str.replace("|",
+                                                                  "")  # if yes/no questions are answered with yes for the first time, "|" will appear in roster
     df_para['datetime_utc'] = pd.to_datetime(df_para['timestamp_utc'])  # generate date-time, TZ not yet considered
 
-    if df_questionnaires.empty is False:
-        df_para = df_para.merge(df_questionnaires, how='left', left_on='param', right_on='variable_name')
-    df_para['answer_changed'] = False
+    df_para = set_survey_name_version(df_para, survey_name, survey_version)
 
+    if df_questionnaires.empty is False:
+        df_para = df_para.merge(df_questionnaires, how='left', left_on=['param', 'survey_name', 'survey_version'],
+                                right_on=['variable_name', 'survey_name', 'survey_version'])
+    df_para['answer_changed'] = False
     # Normalize columns
     df_para.columns = [normalize_column_name(c) for c in df_para.columns]
     return df_para
 
 
-def set_survey_name_version(dfs, survey_name, survey_version):
+def set_survey_name_version(df, survey_name, survey_version):
     """
     This function adds the survey_name and survey_version as new columns to each DataFrame in the list of DataFrames.
 
     Parameters:
-    dfs (list): A list of DataFrames to which the survey_name and survey_version are to be added as new columns.
+    dfs (dataframe): DataFrames to which the survey_name and survey_version are to be added as new columns.
     survey_name (str): The name of the survey to be added as a new column in each DataFrame.
     survey_version (str): The version of the survey to be added as a new column in each DataFrame.
 
     Returns:
-    dfs (list): The list of updated DataFrames, each containing new columns for the survey_name and survey_version.
+    df (list): The updated DataFrame, each containing new columns for the survey_name and survey_version.
     """
-    for index, df in enumerate(dfs):
-        dfs[index]['survey_name'] = survey_name
-        dfs[index]['survey_version'] = survey_version
-    return dfs
+    df['survey_name'] = survey_name
+    df['survey_version'] = survey_version
+    return df
 
 
 class SurveyManager:
@@ -450,8 +464,12 @@ class SurveyManager:
         """
         self.get_files()
         if self.config.surveys != 'all':
-            self.file_dict = {survey: survey_data for survey, survey_data in self.file_dict.items() if
-                              survey in self.config.surveys}
+            if self.config.survey_version != 'all':
+                self.file_dict = {k: {nk: v for nk, v in nested_dict.items() if nk in self.config.survey_version} for
+                                  k, nested_dict in self.file_dict.items() if k in self.config.surveys}
+            else:
+                self.file_dict = {survey: survey_data for survey, survey_data in self.file_dict.items() if
+                                  survey in self.config.surveys}
 
     def extract(self, overwrite_dir=False):
         """
@@ -528,9 +546,7 @@ class SurveyManager:
                 if reload is False and os.path.isdir(processed_data_path):
                     df_paradata, df_questionnaires, df_microdata = load_dataframes(processed_data_path)
                 else:
-                    df_paradata, df_questionnaires, df_microdata = get_data(survey_path)
-                    df_paradata, df_questionnaires, df_microdata = set_survey_name_version(
-                        [df_paradata, df_questionnaires, df_microdata], survey_name, survey_version)
+                    df_paradata, df_questionnaires, df_microdata = get_data(survey_path, survey_name, survey_version)
                     if save_to_disk:
                         save_dataframes(df_paradata, df_questionnaires, df_microdata, processed_data_path)
 
