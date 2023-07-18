@@ -200,7 +200,7 @@ def get_microdata(survey_path, df_questionnaires, survey_name, survey_version):
         combined_df = combined_df.merge(df_questionnaires, how='left',
                                         left_on=['variable', 'survey_name', 'survey_version'],
                                         right_on=['variable_name', 'survey_name', 'survey_version']).sort_values(
-            ['interview__id', 'question_seq'] + roster_columns)
+            ['interview__id', 'qnr_seq'] + roster_columns)
 
     combined_df.reset_index(drop=True, inplace=True)
 
@@ -226,7 +226,7 @@ def process_json_structure(children, parent_group_title, counter, question_data)
     for child in children:
         if "$type" in child:
             question_data.append({
-                "question_seq": counter,
+                "qnr_seq": counter,
                 "VariableName": child.get("VariableName"),
                 "type": child["$type"],
                 "QuestionType": child.get("QuestionType"),
@@ -338,6 +338,9 @@ def get_questionaire(survey_path, survey_name, survey_version):
         split_columns = qnr_df['parents'].str.split(' > ', expand=True)
         split_columns.columns = [f"parent_{i + 1}" for i in range(split_columns.shape[1])]
         qnr_df = pd.concat([qnr_df, split_columns], axis=1)
+        qmask = qnr_df['QuestionScope'] == 0
+        qnr_df['question_sequence'] = qmask.cumsum()
+        qnr_df.loc[~qmask, 'question_sequence'] = None
     categories_path = os.path.join(survey_path, 'Questionnaire/content/Categories')
     if os.path.exists(categories_path):
         categories = get_categories(categories_path)
