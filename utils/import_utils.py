@@ -30,10 +30,25 @@ def get_file_parts(filename):
     return questionnaire, version, file_format, interview_status
 
 
+def assign_type(df, dtypes):
+    for column in dtypes.index:
+        df[column] = df[column].astype(dtypes[column])
+    return df
+
+
 def load_dataframes(processed_data_path):
+
     df_paradata = pd.read_csv(os.path.join(processed_data_path, 'paradata.csv'))
+    paradata_dtypes = pd.read_pickle(os.path.join(processed_data_path, 'df_paradata_dtypes.pkl'))
+    df_paradata = assign_type(df_paradata, paradata_dtypes)
+
     df_microdata = pd.read_csv(os.path.join(processed_data_path, 'microdata.csv'))
+    microdata_dtypes = pd.read_pickle(os.path.join(processed_data_path, 'df_microdata_dtypes.pkl'))
+    df_microdata = assign_type(df_microdata, microdata_dtypes)
+
     df_questionnaire = pd.read_csv(os.path.join(processed_data_path, 'questionnaire.csv'))
+    questionnaire_dtypes = pd.read_pickle(os.path.join(processed_data_path, 'df_questionnaires_dtypes.pkl'))
+    df_questionnaire = assign_type(df_questionnaire, questionnaire_dtypes)
 
     return df_paradata, df_questionnaire, df_microdata
 
@@ -41,10 +56,18 @@ def load_dataframes(processed_data_path):
 def save_dataframes(df_paradata, df_questionnaires, df_microdata, processed_data_path):
     if not os.path.exists(processed_data_path):
         os.makedirs(processed_data_path)
-
+    # Save Paradata csv
     df_paradata.to_csv(os.path.join(processed_data_path, 'paradata.csv'), index=False)
+    # Save Paradata dtypes
+    df_paradata.dtypes.to_pickle(os.path.join(processed_data_path, 'df_paradata_dtypes.pkl'))
+    # Save Questionaire
     df_questionnaires.to_csv(os.path.join(processed_data_path, 'questionnaire.csv'), index=False)
+    # Save Questionaire dtypes
+    df_questionnaires.dtypes.to_pickle(os.path.join(processed_data_path, 'df_questionnaires_dtypes.pkl'))
+    # Save Microdata dtypes
     df_microdata.to_csv(os.path.join(processed_data_path, 'microdata.csv'), index=False)
+    # Save Paradata dtypes
+    df_microdata.dtypes.to_pickle(os.path.join(processed_data_path, 'df_microdata_dtypes.pkl'))
 
 
 def get_data(survey_path, survey_name, survey_version):
@@ -196,7 +219,6 @@ def get_microdata(survey_path, df_questionnaires, survey_name, survey_version):
     # Manage the case questionnaires are not available for the survey
     if df_questionnaires.empty is False:
         roster_columns = [c for c in combined_df.columns if '__id' in c and c != 'interview__id']
-        print(survey_path)
         combined_df = combined_df.merge(df_questionnaires, how='left',
                                         left_on=['variable', 'survey_name', 'survey_version'],
                                         right_on=['variable_name', 'survey_name', 'survey_version']).sort_values(
@@ -544,6 +566,7 @@ class SurveyManager:
             target_dir = os.path.join(self.config.data.raw, survey_name)
 
             for survey_version, files in survey.items():
+                print(f"IMPORTING: {survey_name} with version {survey_version}. ")
                 survey_path = os.path.join(target_dir, survey_version)
                 processed_data_path = os.path.join(survey_path, 'processed_data')
                 if reload is False and os.path.isdir(processed_data_path):
@@ -552,7 +575,12 @@ class SurveyManager:
                     df_paradata, df_questionnaires, df_microdata = get_data(survey_path, survey_name, survey_version)
                     if save_to_disk:
                         save_dataframes(df_paradata, df_questionnaires, df_microdata, processed_data_path)
-
+                print(f"{survey_name} with version {survey_version} loaded. "
+                      f"\n"
+                      f"Paradata shape: {df_paradata.shape} "
+                      f"Questionnaires shape: {df_questionnaires.shape} "
+                      f"Microdata shape: {df_microdata.shape} "
+                      )
                 dfs_paradata.append(df_paradata)
                 dfs_questionnaires.append(df_questionnaires)
                 dfs_microdata.append(df_microdata)
