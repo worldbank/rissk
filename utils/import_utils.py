@@ -26,7 +26,7 @@ def get_file_parts(filename):
     if interview_status not in ["Approved", "InterviewerAssigned", "ApprovedBySupervisor", "ApprovedByHQ", "All"]:
         raise ValueError(f"ERROR: {filename} Not a valid Survey Solutions export file. Interview status not found.")
 
-    #file_format = file_format if file_format == 'Paradata' else 'Tabular'
+    file_format = file_format if file_format == 'Paradata' else 'Tabular'
     return questionnaire, version, file_format, interview_status
 
 
@@ -38,17 +38,23 @@ def assign_type(df, dtypes):
 
 def load_dataframes(processed_data_path):
 
-    df_paradata = pd.read_csv(os.path.join(processed_data_path, 'paradata.csv'))
-    paradata_dtypes = pd.read_pickle(os.path.join(processed_data_path, 'df_paradata_dtypes.pkl'))
-    df_paradata = assign_type(df_paradata, paradata_dtypes)
+    df_paradata = pd.read_pickle(os.path.join(processed_data_path, 'paradata.pkl'))
+    df_microdata = pd.read_pickle(os.path.join(processed_data_path, 'microdata.pkl'))
+    df_questionnaire = pd.read_pickle(os.path.join(processed_data_path, 'questionnaire.pkl'))
 
-    df_microdata = pd.read_csv(os.path.join(processed_data_path, 'microdata.csv'))
-    microdata_dtypes = pd.read_pickle(os.path.join(processed_data_path, 'df_microdata_dtypes.pkl'))
-    df_microdata = assign_type(df_microdata, microdata_dtypes)
 
-    df_questionnaire = pd.read_csv(os.path.join(processed_data_path, 'questionnaire.csv'))
-    questionnaire_dtypes = pd.read_pickle(os.path.join(processed_data_path, 'df_questionnaires_dtypes.pkl'))
-    df_questionnaire = assign_type(df_questionnaire, questionnaire_dtypes)
+    # df_paradata = pd.read_csv(os.path.join(processed_data_path, 'paradata.csv'))
+    # df_microdata = pd.read_csv(os.path.join(processed_data_path, 'microdata.csv'))
+    # df_questionnaire = pd.read_csv(os.path.join(processed_data_path, 'questionnaire.csv'))
+
+    # paradata_dtypes = pd.read_pickle(os.path.join(processed_data_path, 'df_paradata_dtypes.pkl'))
+    # df_paradata = assign_type(df_paradata, paradata_dtypes)
+    #
+    # microdata_dtypes = pd.read_pickle(os.path.join(processed_data_path, 'df_microdata_dtypes.pkl'))
+    # df_microdata = assign_type(df_microdata, microdata_dtypes)
+    #
+    # questionnaire_dtypes = pd.read_pickle(os.path.join(processed_data_path, 'df_questionnaires_dtypes.pkl'))
+    # df_questionnaire = assign_type(df_questionnaire, questionnaire_dtypes)
 
     return df_paradata, df_questionnaire, df_microdata
 
@@ -56,18 +62,25 @@ def load_dataframes(processed_data_path):
 def save_dataframes(df_paradata, df_questionnaires, df_microdata, processed_data_path):
     if not os.path.exists(processed_data_path):
         os.makedirs(processed_data_path)
-    # Save Paradata csv
-    df_paradata.to_csv(os.path.join(processed_data_path, 'paradata.csv'), index=False)
-    # Save Paradata dtypes
-    df_paradata.dtypes.to_pickle(os.path.join(processed_data_path, 'df_paradata_dtypes.pkl'))
-    # Save Questionaire
-    df_questionnaires.to_csv(os.path.join(processed_data_path, 'questionnaire.csv'), index=False)
-    # Save Questionaire dtypes
-    df_questionnaires.dtypes.to_pickle(os.path.join(processed_data_path, 'df_questionnaires_dtypes.pkl'))
-    # Save Microdata dtypes
-    df_microdata.to_csv(os.path.join(processed_data_path, 'microdata.csv'), index=False)
-    # Save Paradata dtypes
-    df_microdata.dtypes.to_pickle(os.path.join(processed_data_path, 'df_microdata_dtypes.pkl'))
+    df_paradata.to_pickle(os.path.join(processed_data_path, 'paradata.pkl'))
+    # # Save Questionaire
+    df_questionnaires.to_pickle(os.path.join(processed_data_path, 'questionnaire.pkl'))
+    # # Save Microdata dtypes
+    df_microdata.to_pickle(os.path.join(processed_data_path, 'microdata.pkl'))
+
+    # # Save Paradata csv
+    # df_paradata.to_csv(os.path.join(processed_data_path, 'paradata.csv'), index=False)
+    # # Save Questionaire
+    # df_questionnaires.to_csv(os.path.join(processed_data_path, 'questionnaire.csv'), index=False)
+    # # Save Microdata dtypes
+    # df_microdata.to_csv(os.path.join(processed_data_path, 'microdata.csv'), index=False)
+
+    # # Save Paradata dtypes
+    # df_paradata.dtypes.to_pickle(os.path.join(processed_data_path, 'df_paradata_dtypes.pkl'))
+    # # Save Questionaire dtypes
+    # df_questionnaires.dtypes.to_pickle(os.path.join(processed_data_path, 'df_questionnaires_dtypes.pkl'))
+    # # Save Paradata dtypes
+    # df_microdata.dtypes.to_pickle(os.path.join(processed_data_path, 'df_microdata_dtypes.pkl'))
 
 
 def get_data(survey_path, survey_name, survey_version):
