@@ -26,7 +26,7 @@ def get_file_parts(filename):
     if interview_status not in ["Approved", "InterviewerAssigned", "ApprovedBySupervisor", "ApprovedByHQ", "All"]:
         raise ValueError(f"ERROR: {filename} Not a valid Survey Solutions export file. Interview status not found.")
 
-    file_format = file_format if file_format == 'Paradata' else 'Tabular'
+    #file_format = file_format if file_format == 'Paradata' else 'Tabular'
     return questionnaire, version, file_format, interview_status
 
 
@@ -153,6 +153,8 @@ def transform_multi(df, variable_list, transformation_type):
     return df.copy()
 
 
+
+
 def get_microdata(survey_path, df_questionnaires, survey_name, survey_version):
     """
     This function loads microdata from .dta files in the specified directory and reshapes it into a long format. It also
@@ -165,12 +167,13 @@ def get_microdata(survey_path, df_questionnaires, survey_name, survey_version):
     Returns:
     combined_df (DataFrame): The combined and processed DataFrame containing all survey responses.
     """
+
     # List of variables to exclude
     drop_list = ['interview__key', 'sssys_irnd', 'has__errors', 'interview__status', 'assignment__id']
 
-    # List of file names
+
     file_names = [file for file in os.listdir(survey_path) if
-                  file.endswith('.dta') and not file.startswith(('interview__', 'assignment__'))]
+                  (file.endswith('.dta') or file.endswith('.tab')) and not file.startswith(('interview__', 'assignment__', 'paradata.tab'))]
 
     # define multi/list question conditions
     unlinked_mask = (df_questionnaires['type'] == 'MultyOptionsQuestion') & (df_questionnaires['is_linked'] == False)
@@ -187,8 +190,17 @@ def get_microdata(survey_path, df_questionnaires, survey_name, survey_version):
     # Iterate over each file
     all_dfs = []
     for file_name in file_names:
-        df = pd.read_stata(os.path.join(survey_path, file_name), convert_categoricals=False)
-        df.drop(columns=[col for col in drop_list if col in df.columns], inplace=True)
+        # df = pd.read_stata(os.path.join(survey_path, file_name), convert_categoricals=False)
+        # df.drop(columns=[col for col in drop_list if col in df.columns], inplace=True)
+        x=1
+        if file_name.endswith('.dta'):
+            df = pd.read_stata(os.path.join(survey_path, file_name), convert_categoricals=False, convert_missing=True)
+            df = df.where(df.astype(str) != '.a', -999999999)  # replace '.a' with -999999999 to match tabular export
+            df = df.where(df.astype(str) != '.', np.nan)  # replace '.' with np.nan
+
+        else:
+            df = pd.read_csv(os.path.join(survey_path, file_name), sep='\t')
+
 
         # transform multi/list questions
         df = transform_multi(df, multi_unlinked_vars, 'unlinked')
