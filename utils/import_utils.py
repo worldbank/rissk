@@ -203,9 +203,7 @@ def get_microdata(survey_path, df_questionnaires, survey_name, survey_version):
     # Iterate over each file
     all_dfs = []
     for file_name in file_names:
-        # df = pd.read_stata(os.path.join(survey_path, file_name), convert_categoricals=False)
-        # df.drop(columns=[col for col in drop_list if col in df.columns], inplace=True)
-        x=1
+
         if file_name.endswith('.dta'):
             df = pd.read_stata(os.path.join(survey_path, file_name), convert_categoricals=False, convert_missing=True)
             df = df.where(df.astype(str) != '.a', -999999999)  # replace '.a' with -999999999 to match tabular export
@@ -214,6 +212,8 @@ def get_microdata(survey_path, df_questionnaires, survey_name, survey_version):
         else:
             df = pd.read_csv(os.path.join(survey_path, file_name), sep='\t')
 
+        # drop system-generated columns
+        df.drop(columns=[col for col in drop_list if col in df.columns], inplace=True)
 
         # transform multi/list questions
         df = transform_multi(df, multi_unlinked_vars, 'unlinked')
