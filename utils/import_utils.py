@@ -417,15 +417,12 @@ def get_paradata(survey_path, df_questionnaires, survey_name, survey_version):
     para_path = os.path.join(survey_path, 'paradata.tab')
     df_para = pd.read_csv(para_path, delimiter='\t')
 
-    # replace double-double pipe at the end of paramaters
-    df_para['parameters'] = np.where(df_para['parameters'].str.endswith('||||'),
-                                     df_para['parameters'].str.replace('||||', '||'),
-                                     df_para['parameters'])
+    # split the parameter column, first from the left, then from the right to avoid potential data entry issues
+    df_para[['param', 'answer']] = df_para['parameters'].str.split('\|\|', n=1, expand=True)
+    df_para[['answer', 'roster_level']] = df_para['answer'].str.rsplit('||', n=1, expand=True)
 
-    df_para[['param', 'answer', 'roster_level']] = df_para['parameters'].str.split('\|\|',expand=True)  # split the parameter column
+#    df_para['roster_level'] = df_para['roster_level'].str.replace("|","")  # if yes/no questions are answered with yes for the first time, "|" will appear in roster
 
-    df_para['roster_level'] = df_para['roster_level'].str.replace("|",
-                                                                  "")  # if yes/no questions are answered with yes for the first time, "|" will appear in roster
     df_para['datetime_utc'] = pd.to_datetime(df_para['timestamp_utc'])  # generate date-time, TZ not yet considered
 
     df_para = set_survey_name_version(df_para, survey_name, survey_version)
