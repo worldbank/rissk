@@ -24,11 +24,10 @@ def manage_survey_definition(config):
 
 @hydra.main(config_path='configuration', version_base='1.1', config_name='main.yaml')
 def unit_risk_score(config: DictConfig) -> None:
-    print(OmegaConf.to_yaml(config))
+    #print(OmegaConf.to_yaml(config))
     print("*" * 12)
     config = manage_relative_path(config, hydra.utils.get_original_cwd())
     config = manage_survey_definition(config)
-    print(config)
     survey_list = SurveyManager(config)
     survey_list.extract()
     dfs_paradata, dfs_questionnaires, dfs_microdata = survey_list.get_dataframes()
