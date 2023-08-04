@@ -14,12 +14,13 @@ class DataProcessing:
     def __init__(self, paradata, microdata, questionaire, config):
         self.item_level_columns = ['interview__id', 'variable_name', 'roster_level']
         self._df_paradata = self.make_merging_column(paradata)
+        self.process_paradata()
         self._df_microdata = self.make_merging_column(microdata)
         self._df_questionaire = questionaire
 
-        self._df_para_active = self.make_df_active_paradata()
-        self._df_time_temp = self.make_df_time()
-        self._df_last_temp = self.make_df_last()
+        self._df_para_active = None
+        self._df_time = None
+        self._df_last = None
         self.config = config
 
     def make_merging_column(self, df):
@@ -28,80 +29,114 @@ class DataProcessing:
             lambda row: '_'.join([str(row[col]) for col in self.item_level_columns]), axis=1)
         return df.copy()
 
-    def make_df_time(self):
-        # f__duration_answer, total time spent to record answers, i.e. sum of all time-intervals from active events ending with the item being AnswerSet or AnswerRemoved
-        # f__duration_comment, total time spent to comment, i.e. sum of all time-intervals from active events ending with the item being CommentSet
+    @property
+    def df_time(self):
+        if self._df_time is None:
+            # f__duration_answer, total time spent to record answers, i.e. sum of all time-intervals from active events ending with the item being AnswerSet or AnswerRemoved
+            # f__duration_comment, total time spent to comment, i.e. sum of all time-intervals from active events ending with the item being CommentSet
 
-        df_time = self._df_para_active.copy()
+            df_time = self.df_active_paradata.copy()
 
-        # calculate time difference in seconds
-        df_time['time_difference'] = df_time.groupby('interview__id')['datetime_utc'].diff()
-        df_time['time_difference'] = df_time['time_difference'].dt.total_seconds()
+            # calculate time difference in seconds
+            df_time['time_difference'] = df_time.groupby('interview__id')['datetime_utc'].diff()
+            df_time['time_difference'] = df_time['time_difference'].dt.total_seconds()
+            df_time['f__time_changed'] = np.where(df_time['time_difference'] < -180, df_time['time_difference'], np.nan)
+            df_time.loc[df_time['time_difference'] < 0, 'time_difference'] = pd.NA
+            # time for answers/comments
+            df_time['f__duration_answer'] = df_time.loc[
+                df_time['event'].isin(['AnswerSet', 'AnswerRemoved']), 'time_difference']
+            df_time['f__duration_comment'] = df_time.loc[df_time['event'] == 'CommentSet', 'time_difference']
 
-        # time for answers/comments
-        df_time['f__duration_answer'] = df_time.loc[
-            df_time['event'].isin(['AnswerSet', 'AnswerRemoved']), 'time_difference']
-        df_time['f__duration_comment'] = df_time.loc[df_time['event'] == 'CommentSet', 'time_difference']
+            # summarize on item level
+            df_time = df_time.groupby(self.item_level_columns + ['merging_column']).agg(
+                f__duration_answer=('f__duration_answer', 'sum'),
+                f__duration_comment=('f__duration_comment', 'sum'),
+                f__time_changed=('f__time_changed', 'sum')
+            ).reset_index()
 
-        # summarize on item level
-        df_time = df_time.groupby(self.item_level_columns+['merging_column']).agg(
-            f__duration_answer=('f__duration_answer', 'sum'),
-            f__duration_comment=('f__duration_comment', 'sum')
-        ).reset_index()
-        # TODO! WHY we drop rows without variable_name AFTER aggregation??
-        # drop rows without VariableName
-        df_time = df_time[df_time['variable_name'] != ''].copy()
-        return df_time
+            self._df_time = df_time[df_time['variable_name'] != ''].copy()
+        return self._df_time
 
-    def make_df_active_paradata(self):
-        self.process_paradata()
-        # df_para_active, active events, prior rejection/review events, for questions with scope interviewer
+    @property
+    def df_active_paradata(self):
+        if self._df_para_active is None:
+            # df_para_active, active events, prior rejection/review events, for questions with scope interviewer
 
-        active_events = ['InterviewCreated', 'AnswerSet', 'Resumed', 'AnswerRemoved', 'CommentSet', 'Restarted']
-        # only keep events done by interview (in most cases this should be all, after above filters,
-        # just in case supervisor or HQ answered something while interviewer answered on web mode)
-        # keep active events, prior rejection/review events, for questions with scope interviewer
-        active_mask = (self._df_paradata['event'].isin(active_events)) & \
-                      (self._df_paradata['interviewing']) & \
-                      (self._df_paradata['question_scope'] == 0) & \
-                      (self._df_paradata['role'] == 1)
+            active_events = ['InterviewCreated', 'AnswerSet', 'Resumed', 'AnswerRemoved', 'CommentSet', 'Restarted']
+            # only keep events done by interview (in most cases this should be all, after above filters,
+            # just in case supervisor or HQ answered something while interviewer answered on web mode)
+            # keep active events, prior rejection/review events, for questions with scope interviewer
+            active_mask = (self.df_paradata['event'].isin(active_events)) & \
+                          (self.df_paradata['interviewing'] == True) & \
+                          (self.df_paradata['question_scope'] == 0) & \
+                          (self.df_paradata['role'] == 1)
 
-        vars_needed = ['interview__id', 'order', 'event', 'responsible', 'role', 'tz_offset', 'param', 'answer',
-                       'roster_level', 'datetime_utc', 'variable_name', 'question_sequence', 'question_scope', 'type',
-                       'question_type', 'survey_name', 'survey_version', 'interviewing', 'merging_column']
+            vars_needed = ['interview__id', 'order', 'event', 'responsible', 'role', 'tz_offset', 'param', 'answer',
+                           'roster_level', 'datetime_utc', 'variable_name', 'question_sequence', 'question_scope',
+                           'type',
+                           'question_type', 'survey_name', 'survey_version', 'interviewing', 'merging_column',
+                           'f__answer_year_set', 'f__answer_month_set',
+                           'f__answer_day_set', 'f__half_hour', 'f__answer_time_set'
+                           ]
 
-        df_para_active = self._df_paradata.loc[active_mask, vars_needed].copy().sort_values(
-            ['interview__id', 'order']).reset_index()
+            df_para_active = self.df_paradata.loc[active_mask, vars_needed].copy().sort_values(
+                ['interview__id', 'order']).reset_index()
+            self._df_para_active = df_para_active.copy()
 
-        return df_para_active.copy()
+        return self._df_para_active
 
-    def make_df_last(self):
-        df_last = self._df_para_active[self._df_para_active['event'] == 'AnswerSet'].groupby('merging_column').last()
-        df_last = df_last.sort_values(['interview__id', 'order']).reset_index()
+    @property
+    def df_last(self):
+        if self._df_last is None:
+            df_last = self.df_active_paradata[self.df_active_paradata['event'] == 'AnswerSet'].groupby(
+                'merging_column').last()
+            df_last = df_last.sort_values(['interview__id', 'order']).reset_index()
 
-        # f__previous_question, f__previous_answer, f__previous_roster for previous answer set
-        df_last['f__previous_question'] = df_last.groupby('interview__id')['variable_name'].shift(
-            fill_value='')
-        df_last['f__previous_answer'] = df_last.groupby('interview__id')['answer'].shift(
-            fill_value='')
-        df_last['f__previous_roster'] = df_last.groupby('interview__id')['roster_level'].shift(
-            fill_value='')
-        df_last['f__answer_time_set'] = df_last['datetime_utc'].dt.hour + df_last[
-            'datetime_utc'].dt.round(
-            '30min').dt.minute
-        # f__sequence_jump, Difference between actual answer sequence and
-        # question sequence in the questionnaire, in difference to previous question
-        df_last['answer_sequence'] = df_last.groupby('interview__id').cumcount() + 1
-        df_last['diff'] = df_last['question_sequence'] - df_last['answer_sequence']
-        df_last['f__sequence_jump'] = df_last['diff'].diff()
+            # f__previous_question, f__previous_answer, f__previous_roster for previous answer set
+            df_last['f__previous_question'] = df_last.groupby('interview__id')['variable_name'].shift(
+                fill_value='')
+            df_last['f__previous_answer'] = df_last.groupby('interview__id')['answer'].shift(
+                fill_value='')
+            df_last['f__previous_roster'] = df_last.groupby('interview__id')['roster_level'].shift(
+                fill_value='')
 
-        return df_last
+
+            # f__in_working_hours, indication if f__half_hour is within working hours
+            half_hour_counts = df_last['f__half_hour'].value_counts().sort_index()
+
+            threshold = half_hour_counts.median() * 0.33  # approach 1: interval < 1/3 of the median count of answers set
+            working_hours_1 = half_hour_counts[half_hour_counts >= threshold].index.tolist()
+
+            cumulative_share = (half_hour_counts.sort_values().cumsum() / half_hour_counts.sum()).sort_index()
+            working_hours_2 = half_hour_counts[
+                cumulative_share >= 0.05].index.tolist()  # approach 2: the least frequent intervals with total of 5% of answers set
+
+            df_last['f__in_working_hours'] = df_last['f__half_hour'].isin(working_hours_2)
+
+            # f__sequence_jump, Difference between actual answer sequence and
+            # question sequence in the questionnaire, in difference to previous question
+            df_last['answer_sequence'] = df_last.groupby('interview__id').cumcount() + 1
+            df_last['diff'] = df_last['question_sequence'] - df_last['answer_sequence']
+            df_last['f__sequence_jump'] = df_last.groupby('interview__id')['diff'].diff()
+            self._df_last = df_last.copy()
+        return self._df_last
 
     def process_paradata(self):
-        # dfs_paradata modifications, move to import-utils?
 
         # streamline missing (empty, NaN) to '', important to identify duplicates in terms of roster below
         self._df_paradata.fillna('', inplace=True)
+
+        self._df_paradata['f__answer_time_set'] = (self._df_paradata['datetime_utc'].dt.hour + self._df_paradata[
+            'datetime_utc'].dt.round(
+            '30min').dt.minute / 60)
+        # f__half_hour, half-hour interval of last time answered
+        self._df_paradata['f__half_hour'] = (self._df_paradata['datetime_utc'].dt.hour + (self._df_paradata['datetime_utc'].dt.round(
+            '30min').dt.minute) / 100)
+
+        self._df_paradata['f__answer_day_set'] = self._df_paradata['datetime_utc'].dt.day
+        self._df_paradata['f__answer_month_set'] = self._df_paradata['datetime_utc'].dt.month
+        self._df_paradata['f__answer_year_set'] = self._df_paradata['datetime_utc'].dt.year
+
 
         # interviewing, True prior to Supervisor/HQ interaction, else False
         events_split = ['RejectedBySupervisor', 'OpenedBySupervisor', 'OpenedByHQ', 'RejectedByHQ']
@@ -115,20 +150,24 @@ class DataProcessing:
                 self._df_paradata.loc[min_index:first_reject_index, 'interviewing'] = True
 
     @property
-    def get_df_paradata(self):
+    def df_paradata(self):
         return self._df_paradata
 
     @property
-    def get_df_microdata(self):
+    def df_microdata(self):
         return self._df_microdata
 
     @property
-    def get_df_questionaire(self):
+    def df_questionaire(self):
         return self._df_questionaire
 
     def save_data(self, df, file_name):
         # TODO write generic method to save the data,
         pass
+
+    def get_make_methods(self, method_type='feature'):
+        return [method for method in dir(self) if method.startswith(f"make_{method_type}__")
+                and callable(getattr(self, method))]
 
 
 class FeatureDataProcessing(DataProcessing):
@@ -138,14 +177,16 @@ class FeatureDataProcessing(DataProcessing):
         self._df_features = self.make_df_features()
         # define filter conditions
         self.text_question_mask = (self._df_features['type'] == 'TextQuestion')
-        self.numeric_question_mask = (self._df_features['type'] == 'NumericQuestion') & (
-                self._df_features['value'] != '')
+        self.numeric_question_mask = (self._df_features['type'] == 'NumericQuestion') & \
+                                     (self._df_features['value'] != '') & \
+                                     (~pd.isnull(self._df_features['value']) &
+                                      (self._df_features['value'] != -999999999))
         self.decimal_question_mask = (self._df_features['is_integer'] == False) & (self._df_features['value'] != '')
         self._applied_methods = []
 
     @property
     def df_features(self):
-        for method_name in self.get_make_feature_methods():
+        for method_name in self.get_make_methods():
             if method_name not in self._applied_methods:
                 self._applied_methods.append(method_name)
                 try:
@@ -155,17 +196,21 @@ class FeatureDataProcessing(DataProcessing):
         return self._df_features
 
     def make_df_features(self):
-        df_features = self._df_microdata[['value', 'type', 'is_integer',
-                                          'n_answers', 'answer_sequence', 'merging_column']].copy()
-        df_features['value'].fillna('', inplace=True)
-        return df_features
+        df_features = self._df_microdata[['value', 'type', 'is_integer', 'qnr_seq',
+                                          'n_answers', 'answer_sequence',
+                                          'merging_column'] + self.item_level_columns].copy()
+        # df_features['value'].fillna('', inplace=True)
+        paradata_columns = ['responsible', 'f__answer_year_set', 'f__answer_month_set',
+                            'f__answer_day_set', 'f__half_hour', 'f__answer_time_set']
+        df_features = df_features.merge(self.df_active_paradata[paradata_columns+['merging_column']], how='left', on='merging_column')
+
+        return df_features.copy()
 
     def make_feature__string_length(self):
         # f__string_length, length of string answer, if TextQuestions, empty if not
         self._df_features['f__string_length'] = pd.NA
         self._df_features.loc[self.text_question_mask, 'f__string_length'] = self._df_features.loc[
-            self.text_question_mask, 'value'].str.len()
-        self._df_features['f__string_length'] = self._df_features['f__string_length'].astype('Int64')
+            self.text_question_mask, 'value'].str.len().astype('Int64')
 
     def make_feature__numeric_response(self):
         # f__numeric_response, response, if NumericQuestions, empty if not
@@ -174,17 +219,17 @@ class FeatureDataProcessing(DataProcessing):
             self._df_features[self.numeric_question_mask]['value'].astype(
                 float)
 
-    def make_feature__first_digit(self):
-        # f__first_digit, first digit of the response if numeric question, empty if not
-        self._df_features['f__first_digit'] = pd.NA
-        self._df_features.loc[self.numeric_question_mask, 'f__first_digit'] = \
-            self._df_features.loc[self.numeric_question_mask, 'value'].astype(str).str[0].astype('Int64')
+    # def make_feature__first_digit(self):
+    #     # f__first_digit, first digit of the response if numeric question, empty if not
+    #     self._df_features['f__first_digit'] = pd.NA
+    #     self._df_features.loc[self.numeric_question_mask, 'f__first_digit'] = \
+    #         self._df_features.loc[self.numeric_question_mask, 'value'].fillna('').astype(str).str[0].astype('Int64')
 
     def make_feature__last_digit(self):
         # f__last_digit, modulus of 10 of the response if numeric question, empty if not
         self._df_features['f__last_digit'] = pd.NA
         self._df_features.loc[self.numeric_question_mask, 'f__last_digit'] = pd.to_numeric(
-            self._df_features.loc[self.numeric_question_mask, 'value']).astype('int64') % 10
+            self._df_features.loc[self.numeric_question_mask, 'value'].fillna('')).astype('int64') % 10
 
     def make_feature__first_decimal(self):
         # f__first_decimal, first decimal digit if numeric question, empty if not
@@ -197,8 +242,9 @@ class FeatureDataProcessing(DataProcessing):
         # f__rel_answer_position, relative position of the selected answer
         self._df_features['f__answer_position'] = pd.NA
         single_question_mask = (self._df_features['type'] == 'SingleQuestion') & (
-                    self._df_features['n_answers'] > 2)  # only questions with more than two answers
-        self._df_features.loc[single_question_mask, 'f__answer_position'] = self._df_features.loc[single_question_mask].apply(
+                self._df_features['n_answers'] > 2)  # only questions with more than two answers
+        self._df_features.loc[single_question_mask, 'f__answer_position'] = self._df_features.loc[
+            single_question_mask].apply(
             lambda row: round(row['answer_sequence'].index(row['value']) / (row['n_answers'] - 1), 3) if (row[
                                                                                                               'value'] in
                                                                                                           row[
@@ -241,49 +287,49 @@ class FeatureDataProcessing(DataProcessing):
         # self._df_features = self.merged_temp.copy()
         pass
 
+    def make_feature__time_changed(self):
+        self._df_features['f__time_changed'] = self._df_features['merging_column'].map(
+            self.df_time.set_index('merging_column')['f__time_changed'])
+
     def make_feature__duration_answer(self):
         self._df_features['f__duration_answer'] = self._df_features['merging_column'].map(
-            self._df_time_temp.set_index('merging_column')['f__duration_answer'])
+            self.df_time.set_index('merging_column')['f__duration_answer'])
 
     def make_feature__duration_comment(self):
         self._df_features['f__duration_comment'] = self._df_features['merging_column'].map(
-            self._df_time_temp.set_index('merging_column')['f__duration_comment'])
+            self.df_time.set_index('merging_column')['f__duration_comment'])
 
     def make_feature__previous_question(self):
         self._df_features['f__previous_question'] = self._df_features['merging_column'].map(
-            self._df_last_temp.set_index('merging_column')['f__previous_question'])
+            self.df_last.set_index('merging_column')['f__previous_question'])
 
     def make_feature__previous_answer(self):
         self._df_features['f__previous_answer'] = self._df_features['merging_column'].map(
-            self._df_last_temp.set_index('merging_column')['f__previous_answer'])
+            self.df_last.set_index('merging_column')['f__previous_answer'])
 
     def make_feature__previous_roster(self):
         self._df_features['f__previous_roster'] = self._df_features['merging_column'].map(
-            self._df_last_temp.set_index('merging_column')['f__previous_roster'])
+            self.df_last.set_index('merging_column')['f__previous_roster'])
 
     def make_feature__sequence_jump(self):
         self._df_features['f__sequence_jump'] = self._df_features['merging_column'].map(
-            self._df_last_temp.set_index('merging_column')['f__sequence_jump'])
+            self.df_last.set_index('merging_column')['f__sequence_jump'])
 
     def make_feature__answer_time_set(self):
         self._df_features['f__answer_time_set'] = self._df_features['merging_column'].map(
-            self._df_last_temp.set_index('merging_column')['f__answer_time_set'])
-
-    def get_make_feature_methods(self):
-        return [method for method in dir(self) if method.startswith("make_feature__")
-                and callable(getattr(self, method))]
+            self.df_last.set_index('merging_column')['f__half_hour'])
 
 
 class UnitDataProcessing(DataProcessing):
 
     def __init__(self, paradata, microdata, questionnaire, config):
         super().__init__(paradata, microdata, questionnaire, config)
+        self._df_changes = None
         self._df_unit = self.make_df_unit()
 
-
     @property
-    def df_features(self):
-        for method_name in self.get_make_feature_methods():
+    def df_unit(self):
+        for method_name in self.get_make_methods():
             if method_name not in self._applied_methods:
                 self._applied_methods.append(method_name)
                 try:
@@ -292,8 +338,109 @@ class UnitDataProcessing(DataProcessing):
                     print('ERROR ON ', method_name)
         return self._df_features
 
+    @property
+    def df_changed(self):
+        if self._df_changes is None:
+            df_changed_temp = self.df_active_paradata[self.df_active_paradata['event'] == 'AnswerSet'].copy()
+            df_changed_temp['f__answer_changed'] = False
+
+            # list and multi-select questions (without yes_no_mode)
+            list_mask = (df_changed_temp['type'] == 'TextListQuestion')
+            multi_mask = (df_changed_temp['yes_no_view'] == False)
+            df_changed_temp['answer_list'] = pd.NA
+            df_changed_temp.loc[list_mask, 'answer_list'] = df_changed_temp.loc[list_mask, 'answer'].str.split('|')
+            df_changed_temp.loc[multi_mask, 'answer_list'] = df_changed_temp.loc[multi_mask, 'answer'].str.split(
+                ', |\\|')
+            df_changed_temp['prev_answer_list'] = df_changed_temp.groupby(self.item_level_columns)[
+                'answer_list'].shift()
+            answers_mask = df_changed_temp['prev_answer_list'].notna()
+            df_changed_temp.loc[answers_mask, 'f__answer_changed'] = df_changed_temp.loc[answers_mask].apply(
+                lambda row: not set(row['prev_answer_list']).issubset(set(row['answer_list'])), axis=1)
+
+            # single answer question
+            df_changed_temp['prev_answer'] = df_changed_temp.groupby(self.item_level_columns)['answer'].shift()
+            single_answer_mask = (~df_changed_temp['type'].isin(['MultyOptionsQuestion', 'TextListQuestion'])) & \
+                                 (df_changed_temp['prev_answer'].notna()) & \
+                                 (df_changed_temp['answer'] != df_changed_temp['prev_answer'])
+            df_changed_temp.loc[single_answer_mask, 'f__answer_changed'] = True
+
+            # yes_no_view questions
+            yesno_mask = (df_changed_temp['yes_no_view'] == True)
+            df_filtered = df_changed_temp[yesno_mask].copy()
+            df_filtered[['yes_list', 'no_list']] = df_filtered['answer'].str.split('|', expand=True)
+            df_filtered['yes_list'] = df_filtered['yes_list'].str.split(', ').apply(
+                lambda x: [] if x == [''] or x is None else x)
+            df_filtered['no_list'] = df_filtered['no_list'].str.split(', ').apply(
+                lambda x: [] if x == [''] or x is None else x)
+            df_filtered['prev_yes_list'] = df_filtered.groupby(self.item_level_columns)['yes_list'].shift(fill_value=[])
+            df_filtered['prev_no_list'] = df_filtered.groupby(self.item_level_columns)['no_list'].shift(fill_value=[])
+            df_changed_temp.loc[yesno_mask, 'f__answer_changed'] = df_filtered.apply(
+                lambda row: not set(row['prev_yes_list']).issubset(set(row['yes_list'])), axis=1)
+            df_changed_temp.loc[yesno_mask, 'f__answer_changed'] = df_filtered.apply(
+                lambda row: not set(row['prev_no_list']).issubset(set(row['no_list'])), axis=1)
+
+            # count on item level
+            df_changed_temp = df_changed_temp.groupby(self.item_level_columns)['f__answer_changed'].sum().reset_index()
+            self._df_changes = df_changed_temp.copy()
+        return self._df_changes
+
+    def make_feature__item_removed(self):
+        if 'f__answer_removed' not in self.df_unit.columns:
+            # f__answer_removed, answers removed (by interviewer, or by system as a result of interviewer action).
+            removed_mask = (self.df_paradata['interviewing']) & \
+                           (self.df_paradata['interviewing'] == True) & \
+                           (self.df_paradata['event'] == 'AnswerRemoved')
+            df_item_removed = self.df_paradata[removed_mask]
+
+            df_item_removed = df_item_removed.groupby(self.item_level_columns).agg(
+                f__answer_removed=('order', 'count'),
+            ).reset_index()
+            # to be merged into df_item
+
+            df_unit_removed = df_item_removed.groupby('interview__id').agg(
+                f__answer_removed=('f__answer_removed', 'sum'),
+            )
+            self.df_unit['f__answer_removed'] = self.df_unit['interview__id'].map(
+                df_item_removed.set_index('interview__id')['f__answer_removed']
+            )
+
+    def make_feature__comments(self):
+
+        if 'f__comments_set' not in self.df_unit or 'f__comment_length' not in self.df_unit:
+            # f__comments_set, f_comment_length
+            comment_mask = (self.df_paradata['event'] == 'CommentSet') & \
+                           (self.df_paradata['role'] == 1) & \
+                           (self.df_paradata['interviewing'])
+            df_item_comment = self.df_paradata[comment_mask].copy()
+            df_item_comment['f__comment_length'] = df_item_comment['answer'].str.len()
+            df_item_comment = df_item_comment.groupby(self.item_level_columns).agg(
+                f__comments_set=('order', 'count'),
+                f__comment_length=('f__comment_length', 'sum'),
+            ).reset_index()
+            # to be merged into df_item
+
+            df_unit_comment = df_item_comment.groupby('interview__id').agg(
+                f__comments_set=('f__comments_set', 'sum'),
+                f__comment_length=('f__comment_length', 'sum')
+            ).reset_index()
+
+            self.df_unit['f__comments_set'] = self.df_unit['interview__id'].map(
+                df_unit_comment.set_index('interview__id')['f__comments_set']
+            )
+
+            self.df_unit['f__comment_length'] = self.df_unit['interview__id'].map(
+                df_unit_comment.set_index('interview__id')['f__comment_length']
+            )
+
+
+    def make_feature__number_answers(self):
+        answer_per_interview_df = self.df_active_paradata.groupby('interview__id').variable_name.nunique()
+        answer_per_interview_df = answer_per_interview_df.reset_index()
+        total_questions = self.df_questionaire[self.df_questionaire['type'].str.contains('Question')]['type'].count()
+        self._df_unit['f__number_answers'] = self._df_features['interview__id'].map(
+            answer_per_interview_df.set_index('interview__id')['variable_name']/total_questions)
+
+
     def make_df_unit(self):
-        df_features = self._df_microdata[['value', 'type', 'is_integer',
-                                          'n_answers', 'answer_sequence', 'merging_column']].copy()
-        df_features['value'].fillna('', inplace=True)
-        return df_features
+        df_unit = pd.DataFrame(self.df_paradata.interview__id.unique(), columns=['interview__id'])
+        return df_unit
