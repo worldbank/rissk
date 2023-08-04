@@ -137,17 +137,17 @@ class DataProcessing:
         self._df_paradata['f__answer_month_set'] = self._df_paradata['datetime_utc'].dt.month
         self._df_paradata['f__answer_year_set'] = self._df_paradata['datetime_utc'].dt.year
 
-
         # interviewing, True prior to Supervisor/HQ interaction, else False
         events_split = ['RejectedBySupervisor', 'OpenedBySupervisor', 'OpenedByHQ', 'RejectedByHQ']
         grouped = self._df_paradata.groupby('interview__id')
-        self._df_paradata['interviewing'] = False
+        self._df_paradata['interviewing'] = True
         for _, group_df in grouped:
             matching_events = group_df['event'].isin(events_split)
             if matching_events.any():
-                first_reject_index = matching_events.idxmax() - 1
-                min_index = group_df.index.min()
-                self._df_paradata.loc[min_index:first_reject_index, 'interviewing'] = True
+                match_index = matching_events.idxmax()
+                max_index = group_df.index.max()
+                self._df_paradata.loc[match_index:max_index, 'interviewing'] = False
+
 
     @property
     def df_paradata(self):

@@ -43,6 +43,7 @@ class UnitScore:
                 and callable(getattr(self, method))]
 
     def save(self):
+        # TODO reduce decimal points to first digit
         df = self.df_score[['interview__id', 'responsible', 'unit_risk_score']].copy()
         df.sort_values('unit_risk_score', inplace=True)
         file_name = "_".join([self.config.surveys[0], self.config.survey_version[0], 'unit_risk_score']) + ".csv"
@@ -147,24 +148,30 @@ class UnitScore:
         dbscan.fit(data[['f__Latitude_GPS', 'f__Longitude_GPS']])
 
         # -1 indicates noise in the DBSCAN algorithm
-        data['spatial_outlier'] = dbscan.labels_ == -1
+        data['spatial_outlier'] = dbscan.labels_
+        data['spatial_outlier'] = data['spatial_outlier'].replace({-1: 1})
 
-        temp = (data[(data['proximity_counts'] > 0) | (data['spatial_outlier'] == True)].groupby('interview__id')[
-                    'responsible'].count() /
+        temp = (data.groupby('interview__id')[
+                    'proximity_counts'].sum() /
                 data.groupby('interview__id')[
-                    'responsible'].count()).reset_index()
-
-        self._df_score['s__gps'] = self._df_score['interview__id'].map(
+                    'proximity_counts'].count()).reset_index()
+        # Set  proximity score
+        self._df_score['s__gps_proximity_counts'] = self._df_score['interview__id'].map(
             temp.set_index('interview__id')['responsible'])
+        # Set outlier score
+        self._df_score['s__gps_outlier'] = self._df_score['interview__id'].map(
+            data.set_index('interview__id')['spatial_outlier'])
 
     def make_score__number_answers(self):
+        # TODO we should filter those interview without consent, however
+        # the consent has a different variable_name for distinct survey
         answer_per_interview_df = self._feature_class.df_active_paradata.groupby(
             'interview__id').variable_name.nunique()
         answer_per_interview_df = answer_per_interview_df.reset_index()
         total_questions = \
-        self._feature_class.df_questionaire[self._feature_class.df_questionaire['type'].str.contains('Question')][
-            'type'].count()
-        self._df_score['f__number_answers'] = self._feature_class._df_features['interview__id'].map(
+            self._feature_class.df_questionaire[self._feature_class.df_questionaire['type'].str.contains('Question')][
+                'type'].count()
+        self._df_score['f__number_answers'] = self._feature_class.df_features['interview__id'].map(
             answer_per_interview_df.set_index('interview__id')['variable_name'] / total_questions)
 
     @staticmethod
@@ -173,12 +180,8 @@ class UnitScore:
         keep_columns = []
         total_interviews = data.interview__id.nunique()
         for col in data.columns:
-            if (data[col].nunique() < 3 or data[
-                col].count() / total_interviews < 0.2) and col not in index_col:
+            if (data[col].nunique() < 3 or data[col].count() / total_interviews < 0.2) and col not in index_col:
                 drop_columns.append(col)
-                # print(col, df_sequence_jump[col].count())
             else:
-                # if (col not in ['interview__id','merging_column']) and abs(pivot_table__sequence_jump[col].skew())<1:
-                #     pivot_table__sequence_jump[[col]] = pivot_table__sequence_jump[[col]].apply(np.log)
                 keep_columns.append(col)
         return keep_columns, drop_columns
