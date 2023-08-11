@@ -37,11 +37,9 @@ def assign_type(df, dtypes):
 
 
 def load_dataframes(processed_data_path):
-
     df_paradata = pd.read_pickle(os.path.join(processed_data_path, 'paradata.pkl'))
     df_microdata = pd.read_pickle(os.path.join(processed_data_path, 'microdata.pkl'))
     df_questionnaire = pd.read_pickle(os.path.join(processed_data_path, 'questionnaire.pkl'))
-
 
     # df_paradata = pd.read_csv(os.path.join(processed_data_path, 'paradata.csv'))
     # df_microdata = pd.read_csv(os.path.join(processed_data_path, 'microdata.csv'))
@@ -140,32 +138,32 @@ def transform_multi(df, variable_list, transformation_type):
                 else ['' for _ in range(len(df))]
 
             for col in related_cols:
+
                 if transformation_type == 'unlinked':
                     suffix = int(col.split('__')[1])
                     mask = df[col] > 0
                     transformation = [x + [suffix] if mask.iloc[i] else x for i, x in enumerate(transformation)]
                 elif transformation_type == 'linked':
-                    mask = df[col].notna()
+                    mask = (df[col].notna())
                     transformation = [x + [df.at[i, col]] if mask.iloc[i] else x for i, x in enumerate(transformation)]
                 elif transformation_type == 'list':
-                    mask = (df[col] != '##N/A##') & (df[col] != '')
+                    mask = (df[col] != '##N/A##') & (df[col] != '') & (df[col] != '-999999999') & (df[col] != -999999999)
                     transformation = [x + [df.at[i, col]] if mask.iloc[i] else x for i, x in enumerate(transformation)]
                 elif transformation_type == 'gps':
                     transformation = [x + (',' if x else '') + (str(df.at[i, col])
                                                                 if pd.notna(df.at[i, col])
-                                                                   and df.at[i, col] != '##N/A##'
+                                                                   and df.at[i, col] not in ['##N/A##', '-999999999', -999999999]
                                                                 else '') for i, x in enumerate(transformation)]
 
-            transformation = [x if x else float('nan') for x in transformation] if transformation_type != 'gps' else [
-                x if x else '' for x in transformation]
+            transformation = [x
+                              if x else float('nan') for x in transformation] if transformation_type != 'gps' else [
+                list(filter(lambda v: v != -999999999, x)) if x else '' for x in transformation]
             transformed_df[var] = transformation  # Add the transformation to the transformed DataFrame
             df = df.drop(related_cols, axis=1)  # Drop the original columns
 
     df = pd.concat([df, transformed_df], axis=1)  # Concatenate the original DataFrame with the transformations
 
     return df.copy()
-
-
 
 
 def get_microdata(survey_path, df_questionnaires, survey_name, survey_version):
@@ -184,9 +182,9 @@ def get_microdata(survey_path, df_questionnaires, survey_name, survey_version):
     # List of variables to exclude
     drop_list = ['interview__key', 'sssys_irnd', 'has__errors', 'interview__status', 'assignment__id']
 
-
     file_names = [file for file in os.listdir(survey_path) if
-                  (file.endswith('.dta') or file.endswith('.tab')) and not file.startswith(('interview__', 'assignment__', 'paradata.tab'))]
+                  (file.endswith('.dta') or file.endswith('.tab')) and not file.startswith(
+                      ('interview__', 'assignment__', 'paradata.tab'))]
 
     # define multi/list question conditions
     unlinked_mask = (df_questionnaires['type'] == 'MultyOptionsQuestion') & (df_questionnaires['is_linked'] == False)
@@ -233,12 +231,25 @@ def get_microdata(survey_path, df_questionnaires, survey_name, survey_version):
         value_vars = [col for col in df.columns if col not in id_vars]
         df_long = df.melt(id_vars=id_vars, value_vars=value_vars, var_name='variable', value_name='value')
         df_long['filename'] = file_name
+
+
+
         all_dfs.append(df_long)
     if len(all_dfs) > 0:
 
         combined_df = pd.concat(all_dfs, ignore_index=True)
     else:
         combined_df = pd.DataFrame()
+
+    # Drop column with null or empty string in value
+    # Function to check if the value is not an empty string or NaN
+    def is_valid(value):
+        if isinstance(value, list):
+            return True#bool(value)  # Not an empty list
+        return value != '' and pd.notna(value)  # Not an empty string or NaN
+
+    # Keep rows where the 'value' column passes the is_valid check
+    combined_df = combined_df[combined_df['value'].apply(is_valid)]
 
     combined_df = set_survey_name_version(combined_df, survey_name, survey_version)
     # Manage the case questionnaires are not available for the survey
@@ -421,7 +432,7 @@ def get_paradata(survey_path, df_questionnaires, survey_name, survey_version):
     df_para[['param', 'answer']] = df_para['parameters'].str.split('\|\|', n=1, expand=True)
     df_para[['answer', 'roster_level']] = df_para['answer'].str.rsplit('||', n=1, expand=True)
 
-#    df_para['roster_level'] = df_para['roster_level'].str.replace("|","")  # if yes/no questions are answered with yes for the first time, "|" will appear in roster
+    #    df_para['roster_level'] = df_para['roster_level'].str.replace("|","")  # if yes/no questions are answered with yes for the first time, "|" will appear in roster
 
     df_para['datetime_utc'] = pd.to_datetime(df_para['timestamp_utc'])  # generate date-time, TZ not yet considered
 
