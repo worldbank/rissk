@@ -310,6 +310,7 @@ def process_json_structure(children, parent_group_title, counter, question_data)
                 "IsRoster": child.get("IsRoster"),
                 "LinkedToRosterId": child.get("LinkedToRosterId"),
                 "LinkedToQuestionId": child.get("LinkedToQuestionId"),
+                "CascadeFromQuestionId": child.get("CascadeFromQuestionId"),
                 "parents": parent_group_title
             })
             counter += 1
