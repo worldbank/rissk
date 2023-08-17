@@ -10,6 +10,65 @@ data:
 
 surveys: [ifad_tunesia]
 survey_version: [EndlineFINALV106_1]
+reload: true
+extract: true
+save_to_disk: true
 
-defaults:
-  - environment: all
+features:
+  answer_time_set:
+    use: true
+  answer_changed:
+    use: true
+  answer_position:
+    use: true
+  answer_removed:
+    use: true
+  answer_selected:
+    use: true
+  answer_share_selected:
+    use: false
+  answer_duration:
+    use: true
+  comment_length:
+    use: false
+  comment_set:
+    use: false
+  comment_duration:
+    use: false
+  first_decimal:
+    use: true
+  first_digit:
+    use: true
+  last_digit:
+    use: false
+  numeric_response:
+    use: true
+  sequence_jump:
+    use: true
+  string_length:
+    use: false
+  time_changed:
+    use: true
+  gps:
+    use: true
+    sub_features: [gps_latitude, gps_longitude, gps_accuracy]
+    parameters:
+      contamination: 0.10
+  pause_count:
+    use: true
+  pause_duration:
+    use: true
+  pause_list:
+    use: false
+  number_unanswered:
+    use: true
+  number_answered:
+    use: true
+  total_duration:
+    use: true
+  total_elapse:
+    use: true
+  single_question:
+    use: true
+  multi_option_question:
+      use: true

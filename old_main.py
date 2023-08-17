@@ -1,10 +1,11 @@
 import os
 
 from omegaconf import DictConfig, OmegaConf
-from src.unit_proccessing import *
+from utils.process_utils import *
+from utils.import_utils import *
+from utils.score_process_utils import *
 import hydra
-#from memory_profiler import memory_usage
-
+from memory_profiler import memory_usage
 
 def manage_relative_path(config, abosulute_path):
     for name, relative_path in config.data.items():
@@ -27,13 +28,20 @@ def unit_risk_score(config: DictConfig) -> None:
     print("*" * 12)
     config = manage_relative_path(config, hydra.utils.get_original_cwd())
     config = manage_survey_definition(config)
-    features_class = UnitDataProcessing(config)
-    df_unit = features_class.df_unit
-    features_class.make_global_score()
-    features_class.save()
+    survey_list = SurveyManager(config)
+    print("*", config)
+    survey_list.extract()
+    dfs_paradata, dfs_questionnaires, dfs_microdata = survey_list.get_dataframes(reload=True)
+    features_class = UnitDataProcessing(dfs_paradata, dfs_microdata, dfs_questionnaires, config)
+    x =features_class.df_unit
+    print('done', x.shape)
+    return None
+    # score_class = UnitScore(config, features_class)
+    # score_class.make_global_score()
+    # score_class.save()
 
 
 if __name__ == "__main__":
-    unit_risk_score()
-    # mem_usage = memory_usage(unit_risk_score)
-    # print(f"Memory usage (in MB): {max(mem_usage)}")
+
+    mem_usage = memory_usage(unit_risk_score)
+    print(f"Memory usage (in MB): {max(mem_usage)}")
