@@ -175,4 +175,4 @@ def calculate_entropy(column):
     # Calculate the entropy and multiply by the number of record
     # Value counts normalizes the counts to get probabilities
     prob_distribution = column.value_counts(normalize=True).values
-    return entropy(prob_distribution) * len(column)
+    return entropy(prob_distribution) #* len(column)

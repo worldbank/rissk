@@ -4,6 +4,7 @@ from scipy import stats
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.decomposition import PCA
 
+
 class UnitDataProcessing(ItemFeatureProcessing):
 
     def __init__(self, config):
@@ -19,7 +20,6 @@ class UnitDataProcessing(ItemFeatureProcessing):
     #     df_unit.dropna(subset=['interview__id'], inplace=True)
     #     return df_unit
 
-
     @property
     def df_unit_score(self):
         for method_name in self.get_make_methods(method_type='score', level='unit'):
@@ -31,7 +31,6 @@ class UnitDataProcessing(ItemFeatureProcessing):
                     print("ERROR ON FEATURE SCORE: {}, It won't be used in further calculation".format(feature_name))
         self._score_columns = ['interview__id', 'responsible'] + [col for col in self._df_unit if 's__' in col]
         return self._df_unit[self._score_columns]
-
 
     def make_global_score(self):
         scaler = StandardScaler()
@@ -114,11 +113,21 @@ class UnitDataProcessing(ItemFeatureProcessing):
     def make_score_unit__answer_time_set(self, feature_name):
         data = self.make_score__answer_time_set()
         score_name = feature_name.replace('f__', 's__')
-        data = data.groupby('interview__id')[score_name].sum()
+        # take the max number of anomaly for each question, i.e. 'roster_level' + 'variable_name'
+        data['roster_variable'] = data['roster_level'].astype(str) + data['variable_name'].astype(str)
+
+        data = data.groupby(['interview__id', 'roster_variable'])[score_name].max()
         data = data.reset_index()
-        self._df_unit[score_name] = self._df_unit['interview__id'].map(
-            data.set_index('interview__id')[score_name]
-        )
+        data = data.groupby('interview__id')[score_name].sum()
+
+        self._df_unit[score_name] = self._df_unit['interview__id'].map(data)
+        # Normalize by the total number of answer set
+        self._df_unit[score_name] = self._df_unit[score_name] / self._df_unit['f__number_answered']
+        # There might be some odd cases where the number of time set is greater than the number of answer sets,
+        # this is due to some case where the variable "interviewing" is set to true but most of events happens
+        # after it has been already opened by either supervisor or HQ
+        self._df_unit = self._df_unit.apply(lambda x: x if x <= 1 else 1)
+
 
     def make_score_unit__sequence_jump(self, feature_name):
         feature_name = 'f__sequence_jump'
@@ -141,7 +150,8 @@ class UnitDataProcessing(ItemFeatureProcessing):
         )
 
     def make_score_unit__time_changed(self, feature_name):
-        temp = (self.df_item[self.df_item[feature_name] < 0].groupby('interview__id')['responsible'].count()).reset_index()
+        temp = (
+            self.df_item[self.df_item[feature_name] < 0].groupby('interview__id')['responsible'].count()).reset_index()
         score_name = feature_name.replace('f__', 's__')
         self._df_unit[score_name] = self._df_unit['interview__id'].map(
             temp.set_index('interview__id')['responsible'])
@@ -172,7 +182,6 @@ class UnitDataProcessing(ItemFeatureProcessing):
         score_name = feature_name.replace('f__', 's__')
         self._df_unit[score_name] = self._df_unit[feature_name]
 
-
     def make_score_unit__total_elapse(self, feature_name):
         score_name = feature_name.replace('f__', 's__')
         self._df_unit[score_name] = self._df_unit[feature_name]
@@ -192,7 +201,6 @@ class UnitDataProcessing(ItemFeatureProcessing):
     def make_score_unit__number_unanswered(self, feature_name):
         score_name = feature_name.replace('f__', 's__')
         self._df_unit[score_name] = self._df_unit[feature_name]
-
 
     def make_score_unit__pause_duration(self, feature_name):
         score_name = feature_name.replace('f__', 's__')

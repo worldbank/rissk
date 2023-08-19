@@ -1,7 +1,7 @@
-from src.survey_manager import *
+from src.import_manager import *
 
 
-class FeatureProcessing(SurveyManager):
+class FeatureProcessing(ImportManager):
 
     def __init__(self, config):
         super().__init__(config)
@@ -101,8 +101,7 @@ class FeatureProcessing(SurveyManager):
                                       'cascade_from_question_id', 'is_filtered_combobox',
                                       'index_col'] + self.item_level_columns].copy()
 
-        paradata_columns = ['responsible', 'f__answer_year_set', 'f__answer_month_set',
-                            'f__answer_day_set', 'f__half_hour', 'f__answer_time_set']
+        paradata_columns = ['responsible', 'f__answer_time_set']
         df_item = df_item.merge(self.df_active_paradata[paradata_columns + ['index_col']], how='left',
                                 on='index_col')
 
@@ -128,7 +127,7 @@ class FeatureProcessing(SurveyManager):
 
     def add_item_time_features(self, df_item):
         # Define the list of features depending on time
-        time_features = ['f__answer_duration', 'f__comment_duration', 'f__time_changed']
+        time_features = ['f__answer_duration', 'f__comment_duration', 'f__time_changed', 'f__days_from_start']
         if any(col in self._allowed_features for col in time_features):
             df_time = self.get_df_time()
 
@@ -165,11 +164,16 @@ class FeatureProcessing(SurveyManager):
         df_time['f__comment_duration'] = df_time.loc[df_time['event'] == 'CommentSet', 'time_difference']
 
         ###### UNIT features
-        df_time['f__total_duration'] = df_time.loc[(
-                df_time['event'].isin(['AnswerSet', 'AnswerRemoved', 'CommentSet', 'Resumed', 'Restarted']) & (
+        active_events = ['AnswerSet', 'AnswerRemoved', 'CommentSet', 'Resumed', 'Restarted']
+
+        df_time['f__total_duration'] = df_time.loc[(df_time['event'].isin(active_events) & (
                 df_time['time_difference'] < 20 * 60)), 'time_difference']
         df_time['f_pause_duration'] = df_time.loc[df_time['event'].isin(['Resumed', 'Restarted']), 'time_difference']
-
+        # Get the min date from the min question sequesce as there might be some time setting
+        # change later that would change the starting date if just looking at the min of timestamp
+        min_date = df_time[df_time['question_sequence'] == df_time['question_sequence'].min()]['timestamp_utc'].min()
+        max_date = df_time[df_time['question_sequence'] == df_time['question_sequence'].max()]['timestamp_utc'].max()
+        df_time['f__days_from_start'] = df_time['f__days_from start'] = abs((df_time['timestamp_utc'] - min_date).dt.days) / (max_date-min_date).days
         return df_time
 
     def get_df_sequence(self):
@@ -230,8 +234,11 @@ class FeatureProcessing(SurveyManager):
         return df_unit
 
     def save_data(self, df, file_name):
-        # TODO write generic method to save the data,
-        pass
+
+        target_dir = os.path.join(self.config.data.raw, self.config.surveys)
+        survey_path = os.path.join(target_dir, self.config.survey_version)
+        processed_data_path = os.path.join(survey_path, 'processed_data')
+        df.to_pickle(os.path.join(processed_data_path, f'{file_name}.pkl'))
 
     def get_make_methods(self, method_type='feature', level='item'):
         return [method for method in dir(self) if method.startswith(f"make_{method_type}_{level}__")
@@ -423,6 +430,7 @@ class FeatureProcessing(SurveyManager):
                            & (self.df_microdata['value'] != -999999999)
                            & (self.df_microdata['value'] != '##N/A##')
                            & (self.df_microdata['value'] != '')
+                           & (self.df_microdata['type'] != 'Variable')
                            )
         df_answer_set = self.df_microdata[answer_set_mask]
         df_answer_set = df_answer_set.groupby('interview__id').agg(
@@ -430,18 +438,21 @@ class FeatureProcessing(SurveyManager):
         )
         self._df_unit[feature_name] = self._df_unit['interview__id'].map(
             df_answer_set[feature_name])
+        self._df_unit[feature_name].fillna(0, inplace=True)
 
     def make_feature_unit__number_unanswered(self, feature_name):
         answer_unset_mask = (
                 (self.df_microdata['value'] == -999999999)
                 | (self.df_microdata['value'] == '##N/A##')
-        )
+        ) & (self.df_microdata['type'] != 'Variable')
         df_answer_set = self.df_microdata[answer_unset_mask]
         df_answer_set = df_answer_set.groupby('interview__id').agg(
             f__number_unanswered=('value', 'count')
         )
         self._df_unit[feature_name] = self._df_unit['interview__id'].map(
             df_answer_set[feature_name])
+        # Set to zero if not answered is not present
+        self._df_unit[feature_name].fillna(0, inplace=True)
 
     def make_feature_unit__translation_positions(self, feature_name):
 

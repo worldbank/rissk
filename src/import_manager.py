@@ -443,7 +443,7 @@ def set_survey_name_version(df, survey_name, survey_version):
     return df
 
 
-class SurveyManager:
+class ImportManager:
     """
     This class manages the different paths defined in the configuration file.
 
@@ -460,7 +460,7 @@ class SurveyManager:
 
     def __init__(self, config):
         """
-        The constructor for the SurveyManager class.
+        The constructor for the ImportManager class.
 
         Parameters:
         config: The configuration settings.
