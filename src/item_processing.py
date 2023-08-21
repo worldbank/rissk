@@ -48,9 +48,14 @@ class ItemFeatureProcessing(FeatureProcessing):
         feature_name = ['f__gps_latitude', 'f__gps_longitude', 'f__gps_accuracy']
         data, index_col = self.get_clean_pivot_table(feature_name, remove_low_freq_col=False)
 
-        data.columns = [f'{col[0]}_{col[1]}'.rstrip('_') for col in data.columns]
-
-        data.columns = index_col + feature_name
+        def replace_with_feature_name(columns, feature_names):
+            for i, s in enumerate(columns):
+                for sub in feature_names:
+                    if sub in s:
+                        columns[i] = sub
+                        break
+            return columns
+        data.columns = replace_with_feature_name(list(data.columns), feature_name)
         data = data.reset_index()
 
         # Convert lat, lon to 3D cartesian coordinates
@@ -80,7 +85,7 @@ class ItemFeatureProcessing(FeatureProcessing):
         data['s__spatial_outlier'] = dbscan.labels_
         data['s__spatial_outlier'] = data['s__spatial_outlier'].replace({1: 0, -1: 1})
 
-        return data
+        return data.drop(columns =['x', 'y', 'z','accuracy'])
 
     def make_score__sequence_jump(self):
         col = 'f__sequence_jump'
@@ -127,12 +132,12 @@ class ItemFeatureProcessing(FeatureProcessing):
     def make_score__answer_time_set(self):
         # Detect time set anomalies using ECOD algorithm.
         # ECOD is a parameter-free, highly interpretable outlier detection algorithm based on empirical CDF functions
-        feature = 'f__answer_time_set'  # Adjust contamination parameter as needed
-        data = self.df_item[~pd.isnull(self.df_item[feature])].copy()
+        feature_name = 'f__answer_time_set'
+        score_name = feature_name.replace('f__', 's__')
+        data = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
         contamination = self.config.features.answer_time_set.parameters.contamination
         model = ECOD(contamination=contamination)
-
-        data['s__answer_time_set'] = model.fit_predict(data[[feature]])
+        data[score_name] = model.fit_predict(data[[feature_name]])
 
         # model = IsolationForest(contamination=0.20, random_state=42)
         # X = data[[col]]
@@ -145,6 +150,25 @@ class ItemFeatureProcessing(FeatureProcessing):
         # # mark as not anomaly tthose that lie within the range
         # data.loc[mask, 's__answer_time_set'] = 1
         # data['s__answer_time_set'] = data['s__answer_time_set'].replace({1: 0, -1: 1})
+        return data
+
+    def make_score__answer_changed(self):
+        feature_name = 'f__answer_changed'
+        score_name = feature_name.replace('f__', 's__')
+        data = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
+        contamination = self.config.features.answer_time_set.parameters.contamination
+        model = ECOD(contamination=contamination)
+        data[score_name] = model.fit_predict(data[[feature_name]])
+        return data
+
+
+    def make_score__answer_removed(self):
+        feature_name = 'f__answer_removed'
+        score_name = feature_name.replace('f__', 's__')
+        data = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
+        contamination = self.config.features.answer_time_set.parameters.contamination
+        model = ECOD(contamination=contamination)
+        data[score_name] = model.fit_predict(data[[feature_name]])
         return data
 
     def make_score__answer_duration(self):

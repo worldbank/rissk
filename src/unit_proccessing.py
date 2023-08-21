@@ -126,7 +126,43 @@ class UnitDataProcessing(ItemFeatureProcessing):
         # There might be some odd cases where the number of time set is greater than the number of answer sets,
         # this is due to some case where the variable "interviewing" is set to true but most of events happens
         # after it has been already opened by either supervisor or HQ
-        self._df_unit = self._df_unit.apply(lambda x: x if x <= 1 else 1)
+        self._df_unit[score_name] = self._df_unit[score_name].apply(lambda x: x if x <= 1 else 1)
+
+    def make_score_unit__answer_removed(self, feature_name):
+        data = self.make_score__answer_removed()
+        score_name = feature_name.replace('f__', 's__')
+        # take the max number of anomaly for each question, i.e. 'roster_level' + 'variable_name'
+        data['roster_variable'] = data['roster_level'].astype(str) + data['variable_name'].astype(str)
+
+        data = data.groupby(['interview__id', 'roster_variable'])[score_name].max()
+        data = data.reset_index()
+        data = data.groupby('interview__id')[score_name].sum()
+
+        self._df_unit[score_name] = self._df_unit['interview__id'].map(data)
+        # Normalize by the total number of answer set
+        self._df_unit[score_name] = self._df_unit[score_name] / self._df_unit['f__number_answered']
+        # There might be some odd cases where the number of time set is greater than the number of answer sets,
+        # this is due to some case where the variable "interviewing" is set to true but most of events happens
+        # after it has been already opened by either supervisor or HQ
+        self._df_unit[score_name] = self._df_unit[score_name].apply(lambda x: x if x <= 1 else 1)
+
+    def make_score_unit__answer_changed(self, feature_name):
+        data = self.make_score__answer_changed()
+        score_name = feature_name.replace('f__', 's__')
+        # take the max number of anomaly for each question, i.e. 'roster_level' + 'variable_name'
+        data['roster_variable'] = data['roster_level'].astype(str) + data['variable_name'].astype(str)
+
+        data = data.groupby(['interview__id', 'roster_variable'])[score_name].max()
+        data = data.reset_index()
+        data = data.groupby('interview__id')[score_name].sum()
+
+        self._df_unit[score_name] = self._df_unit['interview__id'].map(data)
+        # Normalize by the total number of answer set
+        self._df_unit[score_name] = self._df_unit[score_name] / self._df_unit['f__number_answered']
+        # There might be some odd cases where the number of time set is greater than the number of answer sets,
+        # this is due to some case where the variable "interviewing" is set to true but most of events happens
+        # after it has been already opened by either supervisor or HQ
+        self._df_unit[score_name] = self._df_unit[score_name].apply(lambda x: x if x <= 1 else 1)
 
 
     def make_score_unit__sequence_jump(self, feature_name):
@@ -156,27 +192,7 @@ class UnitDataProcessing(ItemFeatureProcessing):
         self._df_unit[score_name] = self._df_unit['interview__id'].map(
             temp.set_index('interview__id')['responsible'])
 
-    def make_score_unit__answer_removed(self, feature_name):
-        # f__answer_removed, answers removed
-        score_name = feature_name.replace('f__', 's__')
-        df_unit_removed = self.df_item.groupby('interview__id').agg(
-            f__answer_removed=(feature_name, 'sum'),
-        )
-        df_unit_removed.reset_index(inplace=True)
-        self._df_unit[score_name] = self._df_unit['interview__id'].map(
-            df_unit_removed.set_index('interview__id')[feature_name]
-        )
 
-    def make_score_unit__answer_changed(self, feature_name):
-        # f__answer_removed, answers removed
-        score_name = feature_name.replace('f__', 's__')
-        df_unit_removed = self.df_item.groupby('interview__id').agg(
-            f__answer_changed=(feature_name, 'sum'),
-        )
-        df_unit_removed.reset_index(inplace=True)
-        self._df_unit[score_name] = self._df_unit['interview__id'].map(
-            df_unit_removed.set_index('interview__id')[feature_name]
-        )
 
     def make_score_unit__total_duration(self, feature_name):
         score_name = feature_name.replace('f__', 's__')

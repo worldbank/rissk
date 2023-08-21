@@ -172,8 +172,9 @@ class FeatureProcessing(ImportManager):
         # Get the min date from the min question sequesce as there might be some time setting
         # change later that would change the starting date if just looking at the min of timestamp
         min_date = df_time[df_time['question_sequence'] == df_time['question_sequence'].min()]['timestamp_utc'].min()
-        max_date = df_time[df_time['question_sequence'] == df_time['question_sequence'].max()]['timestamp_utc'].max()
-        df_time['f__days_from_start'] = df_time['f__days_from start'] = abs((df_time['timestamp_utc'] - min_date).dt.days) / (max_date-min_date).days
+        #max_date = df_time[df_time['question_sequence'] == df_time['question_sequence'].max()]['timestamp_utc'].max()
+        df_time['f__days_from_start'] = abs((df_time['timestamp_utc'] - min_date).dt.days) #/ (max_date-min_date).days
+
         return df_time
 
     def get_df_sequence(self):
