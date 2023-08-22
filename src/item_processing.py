@@ -237,7 +237,7 @@ class ItemFeatureProcessing(FeatureProcessing):
             result = df.groupby(['responsible']).apply(calculate_entropy) / np.log2(df.shape[1] - 1)
             result = result.reset_index()
             result.columns = ['responsible', 'entropy']
-            pivot_table[variable_name] = pivot_table['responsible'].map(result.set_index('responsible')['entropy'])
+            pivot_table[variable_name+ feature.replace('f__', '__')] = pivot_table['responsible'].map(result.set_index('responsible')['entropy'])
 
         return pivot_table
 
