@@ -59,42 +59,8 @@ class UnitDataProcessing(ItemFeatureProcessing):
     def make_score_unit__numeric_response(self, feature_name):
         pass
 
-    def make_score_unit__first_digit(self, feature_name):
-        data = self.make_score__first_digit()
-        data['total'] = data.drop(columns='responsible').sum(1)
-        self._df_unit[feature_name.replace('f__', 's__')] = self._df_unit['responsible'].map(
-            data.set_index('responsible')['total'])
-
     def make_score_unit__last_digit(self, feature_name):
         pass
-
-    def make_score_unit__first_decimal(self, feature_name):
-        data = self.make_score__first_decimal()
-        selected_columns = [col for col in data.columns if feature_name.replace('f__', '__') in col]
-        data['total'] = data[selected_columns].sum(1)
-        data = data.groupby('interview__id')['total'].mean()
-        data = data.reset_index()
-        # data[['responsible','total']]
-        self._df_unit[feature_name.replace('f__', 's__')] = self._df_unit['interview__id'].map(
-            data.set_index('interview__id')['total'])
-
-    def make_score_unit__answer_position(self, feature_name):
-        data = self.make_score__answer_position()
-        selected_columns = [col for col in data.columns if feature_name.replace('f__', '__') in col]
-        data['total'] = data[selected_columns].mean(1)
-        data = data.groupby('interview__id')['total'].mean()
-        data = data.reset_index()
-        self._df_unit[feature_name.replace('f__', 's__')] = self._df_unit['interview__id'].map(
-            data.set_index('interview__id')['total'])
-
-    def make_score_unit__answer_selected(self, feature_name):
-        data = self.make_score__answer_selected()
-        selected_columns = [col for col in data.columns if feature_name.replace('f__', '__') in col]
-        data['total'] = data[selected_columns].mean(1)
-        data = data.groupby('interview__id')['total'].mean()
-        data = data.reset_index()
-        self._df_unit[feature_name.replace('f__', 's__')] = self._df_unit['interview__id'].map(
-            data.set_index('interview__id')['total'])
 
     def make_score_unit__single_question(self, feature_name):
         data = self.make_score__single_question()
@@ -123,10 +89,6 @@ class UnitDataProcessing(ItemFeatureProcessing):
         self._df_unit[score_name] = self._df_unit['interview__id'].map(data)
         # Normalize by the total number of answer set
         self._df_unit[score_name] = self._df_unit[score_name] / self._df_unit['f__number_answered']
-        # There might be some odd cases where the number of time set is greater than the number of answer sets,
-        # this is due to some case where the variable "interviewing" is set to true but most of events happens
-        # after it has been already opened by either supervisor or HQ
-        self._df_unit[score_name] = self._df_unit[score_name].apply(lambda x: x if x <= 1 else 1)
 
     def make_score_unit__answer_removed(self, feature_name):
         data = self.make_score__answer_removed()
@@ -144,7 +106,6 @@ class UnitDataProcessing(ItemFeatureProcessing):
         # There might be some odd cases where the number of time set is greater than the number of answer sets,
         # this is due to some case where the variable "interviewing" is set to true but most of events happens
         # after it has been already opened by either supervisor or HQ
-        self._df_unit[score_name] = self._df_unit[score_name].apply(lambda x: x if x <= 1 else 1)
 
     def make_score_unit__answer_changed(self, feature_name):
         data = self.make_score__answer_changed()
@@ -162,8 +123,70 @@ class UnitDataProcessing(ItemFeatureProcessing):
         # There might be some odd cases where the number of time set is greater than the number of answer sets,
         # this is due to some case where the variable "interviewing" is set to true but most of events happens
         # after it has been already opened by either supervisor or HQ
-        self._df_unit[score_name] = self._df_unit[score_name].apply(lambda x: x if x <= 1 else 1)
 
+    def make_score_unit__answer_position(self, feature_name):
+        # answer_position is calculated at responsible level
+        data = self.make_score__answer_position()
+        selected_columns = [col for col in data.columns if feature_name.replace('f__', '__') in col]
+        data['total'] = data[selected_columns].mean(1)
+        data = data.groupby('interview__id')['total'].mean()
+        self._df_unit[feature_name.replace('f__', 's__')] = self._df_unit['interview__id'].map(data)
+
+    def make_score_unit__answer_selected(self, feature_name):
+        data = self.make_score__answer_selected()
+        lower_columns = [col for col in data.columns if feature_name.replace('f__', '__') + '_lower' in col]
+        upper_columns = [col for col in data.columns if feature_name.replace('f__', '__') + '_upper' in col]
+        columns = lower_columns + upper_columns
+        # groupby 'interview__id' and take the sum of anomalies per interview normalized by the number of answer set per variable
+        data = data.groupby('interview__id')[columns].sum().astype(float) / data.groupby('interview__id')[
+            columns].count()
+
+        # Get the sum for each row of the pivot table
+        data['total_lower'] = data[lower_columns].sum(1)
+        data['total_upper'] = data[upper_columns].sum(1)
+
+        self._df_unit[feature_name.replace('f__', 's__') + '_lower'] = self._df_unit['interview__id'].map(
+            data['total_lower']) / self._df_unit['f__number_answered']
+        self._df_unit[feature_name.replace('f__', 's__') + '_upper'] = self._df_unit['interview__id'].map(
+            data['total_upper']) / self._df_unit['f__number_answered']
+
+    def make_score_unit__answer_duration(self, feature_name):
+        data = self.make_score__answer_duration()
+        lower_columns = [col for col in data.columns if feature_name.replace('f__', '__') + '_lower' in col]
+        upper_columns = [col for col in data.columns if feature_name.replace('f__', '__') + '_upper' in col]
+        columns = lower_columns + upper_columns
+        # groupby 'interview__id' and take the sum of anomalies per interview normalized by the number of answer set per variable
+        data = data.groupby('interview__id')[columns].sum().astype(float) / data.groupby('interview__id')[
+            columns].count()
+
+        # Get the sum for each row of the pivot table
+        data['total_lower'] = data[lower_columns].sum(1)
+        data['total_upper'] = data[upper_columns].sum(1)
+
+        self._df_unit[feature_name.replace('f__', 's__') + '_lower'] = self._df_unit['interview__id'].map(
+            data['total_lower']) / self._df_unit['f__number_answered']
+        self._df_unit[feature_name.replace('f__', 's__') + '_upper'] = self._df_unit['interview__id'].map(
+            data['total_upper']) / self._df_unit['f__number_answered']
+
+    def make_score_unit__first_decimal(self, feature_name):
+        data = self.make_score__first_decimal()
+        selected_columns = [col for col in data.columns if feature_name.replace('f__', '__') in col]
+
+        # groupby 'interview__id' and take the sum of anomalies per interview normalized by the number of answer set per variable
+        data = data.groupby('interview__id')[selected_columns].sum().astype(float) / data.groupby('interview__id')[
+            selected_columns].count()
+
+        # Get the sum for each row of the pivot table
+        data['total'] = data[selected_columns].sum(1)
+
+        self._df_unit[feature_name.replace('f__', 's__')] = self._df_unit['interview__id'].map(
+            data['total']) / self._df_unit['f__number_answered']
+
+    def make_score_unit__first_digit(self, feature_name):
+        data = self.make_score__first_digit()
+        data['total'] = data.drop(columns='responsible').sum(1)
+        self._df_unit[feature_name.replace('f__', 's__')] = self._df_unit['responsible'].map(
+            data.set_index('responsible')['total'])
 
     def make_score_unit__sequence_jump(self, feature_name):
         feature_name = 'f__sequence_jump'
@@ -173,16 +196,7 @@ class UnitDataProcessing(ItemFeatureProcessing):
         data[score_name] = data.drop(columns=['interview__id']).sum(1)
 
         self._df_unit[score_name] = self._df_unit['interview__id'].map(
-            data.set_index('interview__id')[score_name]
-        )
-
-    def make_score_unit__answer_duration(self, feature_name):
-        data = self.make_score__answer_duration()
-        self._df_unit['s__answer_duration_lower_outliers'] = self._df_unit['interview__id'].map(
-            data.set_index('interview__id')['s__answer_duration_lower_outliers']
-        )
-        self._df_unit['s__answer_duration__upper_outliers'] = self._df_unit['interview__id'].map(
-            data.set_index('interview__id')['s__answer_duration__upper_outliers']
+            data.set_index('interview__id')[score_name] / self._df_unit['f__number_answered']
         )
 
     def make_score_unit__time_changed(self, feature_name):
@@ -191,8 +205,7 @@ class UnitDataProcessing(ItemFeatureProcessing):
         score_name = feature_name.replace('f__', 's__')
         self._df_unit[score_name] = self._df_unit['interview__id'].map(
             temp.set_index('interview__id')['responsible'])
-
-
+        self._df_unit[score_name] = self._df_unit[score_name].apply(lambda x: 1 if x >= 1 else 0)
 
     def make_score_unit__total_duration(self, feature_name):
         score_name = feature_name.replace('f__', 's__')
@@ -208,7 +221,7 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
     def make_score_unit__pause_count(self, feature_name):
         score_name = feature_name.replace('f__', 's__')
-        self._df_unit[score_name] = self._df_unit[feature_name]
+        self._df_unit[score_name] = self._df_unit[feature_name] / self._df_unit['f__number_answered']
 
     def make_score_unit__number_answered(self, feature_name):
         score_name = feature_name.replace('f__', 's__')

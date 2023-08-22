@@ -101,10 +101,15 @@ class FeatureProcessing(ImportManager):
                                       'cascade_from_question_id', 'is_filtered_combobox',
                                       'index_col'] + self.item_level_columns].copy()
 
-        paradata_columns = ['responsible', 'f__answer_time_set']
-        df_item = df_item.merge(self.df_active_paradata[paradata_columns + ['index_col']], how='left',
+        paradata_columns = ['responsible', 'f__answer_time_set', 'interviewing']
+        # merge microdata with active pardata and keep only the last answer set
+        answer_set_mask = (self.df_active_paradata['event'] =='AnswerSet')
+        interviewing_mask = (self.df_active_paradata['interviewing'] == True)
+        data = self.df_active_paradata[answer_set_mask & interviewing_mask].drop_duplicates(subset='index_col', keep='last')
+        df_item = df_item.merge(data[paradata_columns + ['index_col']], how='left',
                                 on='index_col')
-
+        # Remove items that arew not in interviewing
+        df_item = df_item[df_item['interviewing'] == True]
         df_item = self.add_sequence_features(df_item)
 
         df_item = self.add_item_time_features(df_item)
@@ -382,7 +387,7 @@ class FeatureProcessing(ImportManager):
             count_elements_or_nan)
         # f__share_selected, share between answers selected, and available answers (only for unlinked questions)
         # TODO! confirm that it makes sense to use just put f__answer_share_selected in place of f__answer_selected
-        self._df_item[feature_name] = round(self._df_item[feature_name] / self._df_item['n_answers'], 3)
+        self._df_item[feature_name] = self._df_item[feature_name] / self._df_item['n_answers']
 
     def make_feature_item__comment_length(self, feature_name):
         # f__comment_length
