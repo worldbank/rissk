@@ -10,18 +10,26 @@ data:
 
 surveys: [ifad_tunesia]
 survey_version: [EndlineFINALV106_1]
-reload: true
+reload: false
 extract: true
-save_to_disk: true
+save_to_disk: alse
 
 features:
+  f__days_from_start:
+    use: true
   answer_time_set:
     use: true
+    parameters:
+      contamination: 0.11
   answer_changed:
     use: true
-  answer_position:
-    use: true
+    parameters:
+      contamination: 0.1
   answer_removed:
+    use: true
+    parameters:
+      contamination: 0.1
+  answer_position:
     use: true
   answer_selected:
     use: true

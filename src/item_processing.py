@@ -89,8 +89,8 @@ class ItemFeatureProcessing(FeatureProcessing):
         return data.drop(columns=['x', 'y', 'z', 'accuracy'])
 
     def make_score__sequence_jump(self):
-        col = 'f__sequence_jump'
-        data, index_col = self.get_clean_pivot_table(col, remove_low_freq_col=True)
+        feature_name = 'f__sequence_jump'
+        data, index_col = self.get_clean_pivot_table(feature_name, remove_low_freq_col=True)
         data = find_anomalies(data, index_col=index_col)
         return data
 

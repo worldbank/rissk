@@ -34,10 +34,8 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
     def make_global_score(self):
         scaler = StandardScaler()
-        df_unit_score = self.df_unit_score.copy()
-        score_columns = [col for col in df_unit_score.columns if col.startswith('s__')]
-        df = df_unit_score[score_columns].copy()
-        df = pd.DataFrame(scaler.fit_transform(df), columns=score_columns)
+        score_columns = [col for col in self.df_unit_score.columns if col.startswith('s__')]
+        df = pd.DataFrame(scaler.fit_transform(self.df_unit_score[score_columns]), columns=score_columns)
         pca = PCA(n_components=0.99, whiten=True)
 
         # Conduct PCA
@@ -189,15 +187,14 @@ class UnitDataProcessing(ItemFeatureProcessing):
             data.set_index('responsible')['total'])
 
     def make_score_unit__sequence_jump(self, feature_name):
-        feature_name = 'f__sequence_jump'
         score_name = feature_name.replace('f__', 's__')
         data = self.make_score__sequence_jump()
 
         data[score_name] = data.drop(columns=['interview__id']).sum(1)
 
         self._df_unit[score_name] = self._df_unit['interview__id'].map(
-            data.set_index('interview__id')[score_name] / self._df_unit['f__number_answered']
-        )
+            data.set_index('interview__id')[score_name]
+        )/ self._df_unit['f__number_answered']
 
     def make_score_unit__time_changed(self, feature_name):
         temp = (
