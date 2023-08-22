@@ -71,8 +71,10 @@ class UnitDataProcessing(ItemFeatureProcessing):
         data = self.make_score__multi_option_question()
         selected_columns = [col for col in data.columns if feature_name.replace('f__', '__') in col]
         data['total'] = data[selected_columns].mean(1)
-        self._df_unit[feature_name.replace('f__', 's__')] = self._df_unit['responsible'].map(
-            data.set_index('responsible')['total'])
+        data['total'] = data.drop(columns=['responsible']).mean(1)
+        entropy_ = data.groupby('responsible')['total'].mean()
+
+        self._df_unit[feature_name.replace('f__', 's__')] = self._df_unit['responsible'].map(entropy_)
 
     def make_score_unit__answer_time_set(self, feature_name):
         data = self.make_score__answer_time_set()
