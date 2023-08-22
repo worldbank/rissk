@@ -208,10 +208,10 @@ class ItemFeatureProcessing(FeatureProcessing):
 
         data = pd.DataFrame(pivot_table.responsible.unique(), columns=['responsible'])
         for col in pivot_table.drop(columns=['interview__id', 'roster_level', 'responsible']).columns:
-            entropy_ = pivot_table.groupby('responsible')[col].apply(calculate_entropy)
-            entropy_ = entropy_.reset_index()
+            unique_values = pivot_table[col].nunique()
+            entropy_ = pivot_table.groupby('responsible')[col].apply(calculate_entropy) / np.log2(unique_values)
 
-            data[col + feature.replace('f__', '__')] = data['responsible'].map(entropy_.set_index('responsible')[col])
+            data[col + feature.replace('f__', '__')] = data['responsible'].map(entropy_)
 
         return data
 
@@ -221,26 +221,22 @@ class ItemFeatureProcessing(FeatureProcessing):
         data = self.df_item[filter_condition]
         pivot_table = pd.DataFrame(data.responsible.unique(), columns=['responsible'])
         for variable_name in data.variable_name.unique():
-            df_values = pd.get_dummies(data[data['variable_name'] == variable_name]['value'].explode()).groupby(
-                level=0).sum()
+            mask = (data['variable_name'] == variable_name) & (data['value'] != '##N/A##')
+            df_values = pd.get_dummies(data[mask]['value'].explode()).groupby(level=0).sum()
 
             # Joining back the exploded values to the original dataframe
-            df = data[data['variable_name'] == variable_name][['responsible', 'value']].drop('value', axis=1).join(
-                df_values)
+            df = data[mask][['responsible', 'value']].drop('value', axis=1).join(df_values)
 
             # Function to calculate entropy
             def calculate_entropy(row):
-                values = row.values
-                values = values[values > 0]  # Filter out zero values
-                probabilities = values / values.sum()
-                entropy = -np.sum(probabilities * np.log2(probabilities))  # * len(values)
+                probabilities = row.mean() + 1e-10
+                entropy = -np.sum(probabilities * np.log2(probabilities))
                 return entropy
 
             # # Calculating entropy grouped by 'variable_name' and 'responsible'
-            result = df.groupby(['responsible']).apply(calculate_entropy).reset_index()
+            result = df.groupby(['responsible']).apply(calculate_entropy) / np.log2(df.shape[1] - 1)
+            result = result.reset_index()
             result.columns = ['responsible', 'entropy']
-            pivot_table[variable_name + feature.replace('f__', '__')] = pivot_table['responsible'].map(
-                result.set_index('responsible')['entropy'])
 
         return pivot_table
 

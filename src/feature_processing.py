@@ -432,13 +432,13 @@ class FeatureProcessing(ImportManager):
     ##### UNIT item methods
 
     def make_feature_unit__number_answered(self, feature_name):
-        answer_set_mask = ((~pd.isnull(self.df_microdata['value']))
-                           & (self.df_microdata['value'] != -999999999)
-                           & (self.df_microdata['value'] != '##N/A##')
-                           & (self.df_microdata['value'] != '')
-                           & (self.df_microdata['type'] != 'Variable')
+        answer_set_mask = ((~pd.isnull(self._df_item['value']))
+                           & (self._df_item['value'] != -999999999)
+                           & (self._df_item['value'] != '##N/A##')
+                           & (self._df_item['value'] != '')
+                           & (self._df_item['type'] != 'Variable')
                            )
-        df_answer_set = self.df_microdata[answer_set_mask]
+        df_answer_set = self._df_item[answer_set_mask]
         df_answer_set = df_answer_set.groupby('interview__id').agg(
             f__number_answered=('value', 'count')
         )
@@ -448,10 +448,10 @@ class FeatureProcessing(ImportManager):
 
     def make_feature_unit__number_unanswered(self, feature_name):
         answer_unset_mask = (
-                (self.df_microdata['value'] == -999999999)
-                | (self.df_microdata['value'] == '##N/A##')
-        ) & (self.df_microdata['type'] != 'Variable')
-        df_answer_set = self.df_microdata[answer_unset_mask]
+                (self._df_item['value'] == -999999999)
+                | (self._df_item['value'] == '##N/A##')
+        ) & (self._df_item['type'] != 'Variable')
+        df_answer_set = self._df_item[answer_unset_mask]
         df_answer_set = df_answer_set.groupby('interview__id').agg(
             f__number_unanswered=('value', 'count')
         )
