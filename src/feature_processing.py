@@ -63,8 +63,7 @@ class FeatureProcessing(ImportManager):
                        'param', 'answer', 'roster_level', 'timestamp_utc', 'variable_name',
                        'question_sequence', 'question_scope', 'type', 'question_type',
                        'survey_name', 'survey_version', 'interviewing', 'yes_no_view', 'index_col',
-                       'f__answer_year_set', 'f__answer_month_set',
-                       'f__answer_day_set', 'f__half_hour', 'f__answer_time_set'
+                       'f__half_hour', 'f__answer_time_set'
                        ]
 
         df_para_active = self.df_paradata.loc[active_mask, vars_needed].copy().sort_values(
