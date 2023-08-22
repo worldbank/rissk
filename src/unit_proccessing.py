@@ -196,7 +196,7 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
         self._df_unit[score_name] = self._df_unit['interview__id'].map(
             data.set_index('interview__id')[score_name]
-        )/ self._df_unit['f__number_answered']
+        ) / self._df_unit['f__number_answered']
 
     def make_score_unit__time_changed(self, feature_name):
         temp = (
@@ -208,15 +208,18 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
     def make_score_unit__total_duration(self, feature_name):
         score_name = feature_name.replace('f__', 's__')
-        self._df_unit[score_name] = self._df_unit[feature_name]
+        self._df_unit[score_name] = (self._df_unit[feature_name] - self._df_unit[feature_name].mean()) / self._df_unit[
+            feature_name].std()
 
     def make_score_unit__total_elapse(self, feature_name):
         score_name = feature_name.replace('f__', 's__')
-        self._df_unit[score_name] = self._df_unit[feature_name]
+        self._df_unit[score_name] = (self._df_unit[feature_name] - self._df_unit[feature_name].mean()) / self._df_unit[
+            feature_name].std()
 
     def make_score_unit__pause_duration(self, feature_name):
         score_name = feature_name.replace('f__', 's__')
-        self._df_unit[score_name] = self._df_unit[feature_name]
+        self._df_unit[score_name] = (self._df_unit[feature_name] - self._df_unit[feature_name].mean()) / self._df_unit[
+            feature_name].std()
 
     def make_score_unit__pause_count(self, feature_name):
         score_name = feature_name.replace('f__', 's__')
@@ -230,9 +233,6 @@ class UnitDataProcessing(ItemFeatureProcessing):
         score_name = feature_name.replace('f__', 's__')
         self._df_unit[score_name] = self._df_unit[feature_name]
 
-    def make_score_unit__pause_duration(self, feature_name):
-        score_name = feature_name.replace('f__', 's__')
-        self._df_unit[score_name] = self._df_unit[feature_name]
 
     def make_score_unit__gps(self, feature_name):
         data = self.make_score__gps()

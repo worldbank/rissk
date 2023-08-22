@@ -499,15 +499,17 @@ class FeatureProcessing(ImportManager):
 
     def get_df_pause(self):
         # f__pause_count, f__pause_duration, f__pause_list
-        df_paused_temp = self.df_paradata[
+
+        pause_mask = ((self.df_paradata['role'] == 1) &
+                      (self.df_paradata['interviewing'] == True))
+
+        df_paused_temp = self.df_paradata[pause_mask][
             ['interview__id', 'order', 'event', 'timestamp_utc', 'interviewing']].copy()
         df_paused_temp['prev_event'] = df_paused_temp.groupby('interview__id')['event'].shift(fill_value='')
         df_paused_temp['prev_datetime'] = df_paused_temp.groupby('interview__id')['timestamp_utc'].shift()
 
         pause_mask = (df_paused_temp['event'].isin(['Restarted', 'Resumed']) &
-                      df_paused_temp['prev_event'].isin(['Paused']) &
-                      (self.df_paradata['role'] == 1) &
-                      (df_paused_temp['interviewing'] == True))
+                      df_paused_temp['prev_event'].isin(['Paused']))
 
         df_paused_temp = df_paused_temp.loc[pause_mask]
         df_paused_temp['pause_duration'] = df_paused_temp['timestamp_utc'] - df_paused_temp['prev_datetime']
