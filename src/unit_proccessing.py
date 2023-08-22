@@ -227,11 +227,13 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
     def make_score_unit__number_answered(self, feature_name):
         score_name = feature_name.replace('f__', 's__')
-        self._df_unit[score_name] = self._df_unit[feature_name]
+        self._df_unit[score_name] = (self._df_unit[feature_name] - self._df_unit[feature_name].mean()) / self._df_unit[
+            feature_name].std()
 
     def make_score_unit__number_unanswered(self, feature_name):
         score_name = feature_name.replace('f__', 's__')
-        self._df_unit[score_name] = self._df_unit[feature_name]
+        self._df_unit[score_name] = (self._df_unit[feature_name] - self._df_unit[feature_name].mean()) / self._df_unit[
+            feature_name].std()
 
 
     def make_score_unit__gps(self, feature_name):
