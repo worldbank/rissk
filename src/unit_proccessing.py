@@ -79,50 +79,22 @@ class UnitDataProcessing(ItemFeatureProcessing):
     def make_score_unit__answer_time_set(self, feature_name):
         data = self.make_score__answer_time_set()
         score_name = feature_name.replace('f__', 's__')
-        # take the max number of anomaly for each question, i.e. 'roster_level' + 'variable_name'
-        data['roster_variable'] = data['roster_level'].astype(str) + data['variable_name'].astype(str)
-
-        data = data.groupby(['interview__id', 'roster_variable'])[score_name].max()
-        data = data.reset_index()
-        data = data.groupby('interview__id')[score_name].sum()
-
+        data = data.groupby(['interview__id'])[score_name].sum() / data.groupby(['interview__id'])[score_name].count()
         self._df_unit[score_name] = self._df_unit['interview__id'].map(data)
-        # Normalize by the total number of answer set
-        self._df_unit[score_name] = self._df_unit[score_name] / self._df_unit['f__number_answered']
+
 
     def make_score_unit__answer_removed(self, feature_name):
         data = self.make_score__answer_removed()
         score_name = feature_name.replace('f__', 's__')
-        # take the max number of anomaly for each question, i.e. 'roster_level' + 'variable_name'
-        data['roster_variable'] = data['roster_level'].astype(str) + data['variable_name'].astype(str)
-
-        data = data.groupby(['interview__id', 'roster_variable'])[score_name].max()
-        data = data.reset_index()
-        data = data.groupby('interview__id')[score_name].sum()
-
+        data = data.groupby(['interview__id'])[score_name].sum() / data.groupby(['interview__id'])[score_name].count()
         self._df_unit[score_name] = self._df_unit['interview__id'].map(data)
-        # Normalize by the total number of answer set
-        self._df_unit[score_name] = self._df_unit[score_name] / self._df_unit['f__number_answered']
-        # There might be some odd cases where the number of time set is greater than the number of answer sets,
-        # this is due to some case where the variable "interviewing" is set to true but most of events happens
-        # after it has been already opened by either supervisor or HQ
 
     def make_score_unit__answer_changed(self, feature_name):
         data = self.make_score__answer_changed()
         score_name = feature_name.replace('f__', 's__')
         # take the max number of anomaly for each question, i.e. 'roster_level' + 'variable_name'
-        data['roster_variable'] = data['roster_level'].astype(str) + data['variable_name'].astype(str)
-
-        data = data.groupby(['interview__id', 'roster_variable'])[score_name].max()
-        data = data.reset_index()
-        data = data.groupby('interview__id')[score_name].sum()
-
+        data = data.groupby(['interview__id'])[score_name].sum() / data.groupby(['interview__id'])[score_name].count()
         self._df_unit[score_name] = self._df_unit['interview__id'].map(data)
-        # Normalize by the total number of answer set
-        self._df_unit[score_name] = self._df_unit[score_name] / self._df_unit['f__number_answered']
-        # There might be some odd cases where the number of time set is greater than the number of answer sets,
-        # this is due to some case where the variable "interviewing" is set to true but most of events happens
-        # after it has been already opened by either supervisor or HQ
 
     def make_score_unit__answer_position(self, feature_name):
         # answer_position is calculated at responsible level

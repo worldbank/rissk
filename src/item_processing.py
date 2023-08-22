@@ -4,6 +4,7 @@ from src.utils.stats_utils import *
 from scipy.spatial import cKDTree
 from sklearn.cluster import DBSCAN
 from pyod.models.ecod import ECOD
+from pyod.models.cof import COF
 from scipy import stats
 from sklearn.preprocessing import StandardScaler
 
@@ -77,14 +78,16 @@ class ItemFeatureProcessing(FeatureProcessing):
                   zip(data[['x', 'y', 'z']].values, data['accuracy'])]
 
         data['s__proximity_counts'] = counts
-
+        coords_columns = ['f__gps_latitude', 'f__gps_longitude']
         # Identify spatial outliers
-        dbscan = DBSCAN(eps=0.3, min_samples=5)  # tune these parameters for your data
-        dbscan.fit(data[['f__gps_latitude', 'f__gps_longitude']])
+        # model = DBSCAN(eps=0.3, min_samples=5)  # tune these parameters for your data
+        # model.fit(data[coords_columns])
 
+        model = COF()
+        model.fit(data[coords_columns])
         # -1 indicates noise in the DBSCAN algorithm
-        data['s__spatial_outlier'] = dbscan.labels_
-        data['s__spatial_outlier'] = data['s__spatial_outlier'].replace({1: 0, -1: 1})
+        data['s__spatial_outlier'] = model.predict(data[coords_columns])#model.labels_
+        #data['s__spatial_outlier'] = data['s__spatial_outlier'].replace({1: 0, -1: 1})
 
         return data.drop(columns=['x', 'y', 'z', 'accuracy'])
 
@@ -108,8 +111,6 @@ class ItemFeatureProcessing(FeatureProcessing):
                 {1: 0, -1: 1})
         return pivot_table
 
-
-
     def make_score__answer_time_set(self):
         # Detect time set anomalies using ECOD algorithm.
         # ECOD is a parameter-free, highly interpretable outlier detection algorithm based on empirical CDF functions
@@ -125,7 +126,7 @@ class ItemFeatureProcessing(FeatureProcessing):
         feature_name = 'f__answer_changed'
         score_name = feature_name.replace('f__', 's__')
         data = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
-        contamination = self.config.features.answer_time_set.parameters.contamination
+        contamination = self.config.features.answer_changed.parameters.contamination
         model = ECOD(contamination=contamination)
         data[score_name] = model.fit_predict(data[['qnr_seq', feature_name]])
         return data
@@ -134,11 +135,10 @@ class ItemFeatureProcessing(FeatureProcessing):
         feature_name = 'f__answer_removed'
         score_name = feature_name.replace('f__', 's__')
         data = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
-        contamination = self.config.features.answer_time_set.parameters.contamination
+        contamination = self.config.features.answer_removed.parameters.contamination
         model = ECOD(contamination=contamination)
         data[score_name] = model.fit_predict(data[['qnr_seq', feature_name]])
         return data
-
 
     def make_score__answer_position(self):
         # answer_position is calculated at responsible level
@@ -163,8 +163,8 @@ class ItemFeatureProcessing(FeatureProcessing):
             lower_outlier, upper_outlier = get_outlier_iqr(data, col)
             mask_lower = (~pd.isnull(pivot_table[col])) & (lower_outlier)
             mask_upper = (~pd.isnull(pivot_table[col])) & (upper_outlier)
-            pivot_table.loc[mask_lower, col + feature_name.replace('f__', '__')+'_lower'] = True
-            pivot_table.loc[mask_upper, col + feature_name.replace('f__', '__')+'_upper'] = True
+            pivot_table.loc[mask_lower, col + feature_name.replace('f__', '__') + '_lower'] = True
+            pivot_table.loc[mask_upper, col + feature_name.replace('f__', '__') + '_upper'] = True
         return pivot_table
 
     def make_score__answer_duration(self):
@@ -173,8 +173,8 @@ class ItemFeatureProcessing(FeatureProcessing):
         data, index_col = self.get_clean_pivot_table(feature_name, remove_low_freq_col=True)
         scaler = StandardScaler()
         columns = data.drop(columns=['interview__id', 'roster_level', 'responsible']).columns
-        outliers_columns = ([col +feature_name.replace('f__', '__') + '_lower' for col in columns] +
-                            [col +feature_name.replace('f__', '__') + '_upper' for col in columns])
+        outliers_columns = ([col + feature_name.replace('f__', '__') + '_lower' for col in columns] +
+                            [col + feature_name.replace('f__', '__') + '_upper' for col in columns])
         data = pd.concat([data, pd.DataFrame({col: None for col in outliers_columns}, index=data.index)], axis=1)
 
         # data[outliers_columns] = False
@@ -193,10 +193,10 @@ class ItemFeatureProcessing(FeatureProcessing):
                 z_scores = stats.zscore(X['box_cox'].values)
                 indices_lower_outliers = X[(np.abs(z_scores) > threshold) & (X[col] < X[col].median())].index
                 indices_upper_outliers = X[(np.abs(z_scores) > threshold) & (X[col] > X[col].median())].index
-                data.loc[~pd.isnull(data[col]), col +feature_name.replace('f__', '__') + '_lower'] = False
-                data.loc[~pd.isnull(data[col]), col +feature_name.replace('f__', '__') + '_upper'] = False
-                data.loc[indices_lower_outliers, col +feature_name.replace('f__', '__') + '_lower'] = True
-                data.loc[indices_upper_outliers, col +feature_name.replace('f__', '__') + '_upper'] = True
+                data.loc[~pd.isnull(data[col]), col + feature_name.replace('f__', '__') + '_lower'] = False
+                data.loc[~pd.isnull(data[col]), col + feature_name.replace('f__', '__') + '_upper'] = False
+                data.loc[indices_lower_outliers, col + feature_name.replace('f__', '__') + '_lower'] = True
+                data.loc[indices_upper_outliers, col + feature_name.replace('f__', '__') + '_upper'] = True
 
         return data
 
@@ -237,7 +237,8 @@ class ItemFeatureProcessing(FeatureProcessing):
             result = df.groupby(['responsible']).apply(calculate_entropy) / np.log2(df.shape[1] - 1)
             result = result.reset_index()
             result.columns = ['responsible', 'entropy']
-            pivot_table[variable_name+ feature.replace('f__', '__')] = pivot_table['responsible'].map(result.set_index('responsible')['entropy'])
+            pivot_table[variable_name + feature.replace('f__', '__')] = pivot_table['responsible'].map(
+                result.set_index('responsible')['entropy'])
 
         return pivot_table
 

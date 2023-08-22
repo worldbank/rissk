@@ -38,7 +38,7 @@ def get_file_parts(filename):
     if file_format not in ["Tabular", "STATA", "SPSS", "Paradata"]:
         raise ValueError(f"ERROR: {filename} Not a valid Survey Solutions export file. Export type not found")
 
-    if interview_status not in ["Approved", "InterviewerAssigned", "ApprovedBySupervisor", "ApprovedByHQ", "All"]:
+    if interview_status not in ["Approved", "InterviewerAssigned", "ApprovedBySupervisor", "ApprovedByHQ", "All", 'ApprovedByHeadquarters']:
         raise ValueError(f"ERROR: {filename} Not a valid Survey Solutions export file. Interview status not found.")
 
     file_format = file_format if file_format == 'Paradata' else 'Tabular'
