@@ -415,6 +415,11 @@ def get_paradata(survey_path, df_questionnaires, survey_name, survey_version):
 
     df_para['timestamp_utc'] = pd.to_datetime(df_para['timestamp_utc'])  # generate date-time, TZ not yet considered
 
+    df_para['tz_offset'] = pd.to_timedelta(df_para['tz_offset'].str.replace(':', ' hours ') + ' minutes')
+
+    # Adjust the date column by the timezone offset
+    df_para['timestamp_local'] = df_para['timestamp_utc'] + df_para['tz_offset']
+
     df_para = set_survey_name_version(df_para, survey_name, survey_version)
 
     if df_questionnaires.empty is False:
