@@ -34,7 +34,6 @@ class FeatureProcessing(ImportManager):
                 try:
                     print(f"Processing {feature_name} ...")
                     getattr(self, method_name)(feature_name)
-                    print(f"{feature_name} Processed")
                 except Exception as e:
                     print("ERROR ON FEATURE ITEM: {}, It won't be used in further calculation".format(feature_name))
         return self._df_item
@@ -47,7 +46,6 @@ class FeatureProcessing(ImportManager):
                 try:
                     print(f"Processing {feature_name} ...")
                     getattr(self, method_name)(feature_name)
-                    print(f"{feature_name} Processed")
                 except Exception as e:
                     print("ERROR ON FEATURE UNIT: {}, It won't be used in further calculation".format(feature_name))
         return self._df_unit

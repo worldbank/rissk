@@ -184,7 +184,7 @@ class ItemFeatureProcessing(FeatureProcessing):
             X[col + '_upper_outliers'] = X['is_outlier'].copy()
             # # Filter out outliers to compute box cox tranformation
             X = X[(X['is_outlier'] == False)].copy()
-            if X[col].shape[0] > 0:
+            if X[col].nunique() > 1:
                 box_cox_transformed_data, _ = stats.boxcox(X[col] + 1)
                 X['box_cox'] = box_cox_transformed_data
                 X['box_cox'] = transformed_data_rescaled = scaler.fit_transform(X[['box_cox']])
