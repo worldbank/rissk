@@ -110,9 +110,16 @@ This chapter describes in broad terms the individual steps of the package.
 [@Gabriele]: <> (This is done later, correct?)
 6. Append versions. The questionnaire, microdata and paradata dataframes are appended for all versions. 
 7. Build df_interviewing.
+8. Build features. Features are built on the item or unit level. For details on all features, their scope and how they were built, refer to [Features & Scores](features_scores.md).
+ 
 
 # Integrate into survey
 
-> [!IMPORTANT]  
-> The tool is aimed to provide an additional source of information for and should not make redundant other components of the data quality assurance system, such as  back-checks, audio audits, indicator monitoring, completion and progress checks or high-frequency checks, as these fulfil other important functions.
+> [!WARNING]  
+> The MLSS package is aimed to be an additional source of information. It does not make redundant other components of the data quality assurance system, such as  back-checks, audio audits, indicator monitoring, completion and progress checks or high-frequency checks, as these fulfil other important functions.
 
+[!NOTE]  
+> Highlights information that users should take into account, even when skimming.
+
+> [!IMPORTANT]  
+> Crucial information necessary for users to succeed.
