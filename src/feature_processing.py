@@ -56,7 +56,6 @@ class FeatureProcessing(ImportManager):
         # just in case supervisor or HQ answered something while interviewer answered on web mode)
         # keep active events, prior rejection/review events, for questions with scope interviewer
         active_mask = (self.df_paradata['event'].isin(active_events)) & \
-                      (self.df_paradata['interviewing'] == True) & \
                       (self.df_paradata['question_scope'].isin([0, ''])) & \
                       (self.df_paradata['role'] == 1)
 
@@ -64,8 +63,7 @@ class FeatureProcessing(ImportManager):
                        'param', 'answer', 'roster_level', 'timestamp_utc', 'variable_name',
                        'question_sequence', 'question_scope', 'type', 'question_type',
                        'survey_name', 'survey_version', 'interviewing', 'yes_no_view', 'index_col',
-                       'f__answer_year_set', 'f__answer_month_set',
-                       'f__answer_day_set', 'f__half_hour', 'f__answer_time_set'
+                       'f__half_hour', 'f__answer_time_set'
                        ]
 
         df_para_active = self.df_paradata.loc[active_mask, vars_needed].copy().sort_values(
@@ -101,10 +99,14 @@ class FeatureProcessing(ImportManager):
                                       'cascade_from_question_id', 'is_filtered_combobox',
                                       'index_col'] + self.item_level_columns].copy()
 
-        paradata_columns = ['responsible', 'f__answer_time_set']
-        df_item = df_item.merge(self.df_active_paradata[paradata_columns + ['index_col']], how='left',
+        paradata_columns = ['responsible', 'f__answer_time_set', 'interviewing']
+        # merge microdata with active pardata and keep only the last answer set
+        answer_set_mask = (self.df_active_paradata['event'] =='AnswerSet')
+        data = self.df_active_paradata[answer_set_mask ].drop_duplicates(subset='index_col', keep='last')
+        df_item = df_item.merge(data[paradata_columns + ['index_col']], how='left',
                                 on='index_col')
-
+        # Remove items that arew not in interviewing
+        df_item = df_item[df_item['interviewing'] == True]
         df_item = self.add_sequence_features(df_item)
 
         df_item = self.add_item_time_features(df_item)
@@ -211,9 +213,9 @@ class FeatureProcessing(ImportManager):
                 self._df_paradata['timestamp_utc'].dt.hour +
                 self._df_paradata['timestamp_utc'].dt.round('30min').dt.minute / 100)
 
-        self._df_paradata['f__answer_day_set'] = self._df_paradata['timestamp_utc'].dt.day
-        self._df_paradata['f__answer_month_set'] = self._df_paradata['timestamp_utc'].dt.month
-        self._df_paradata['f__answer_year_set'] = self._df_paradata['timestamp_utc'].dt.year
+        # self._df_paradata['f__answer_day_set'] = self._df_paradata['timestamp_utc'].dt.day
+        # self._df_paradata['f__answer_month_set'] = self._df_paradata['timestamp_utc'].dt.month
+        # self._df_paradata['f__answer_year_set'] = self._df_paradata['timestamp_utc'].dt.year
 
         # interviewing, True prior to Supervisor/HQ interaction, else False
         events_split = ['RejectedBySupervisor', 'OpenedBySupervisor', 'OpenedByHQ', 'RejectedByHQ']
@@ -226,8 +228,10 @@ class FeatureProcessing(ImportManager):
                 max_index = group_df.index.max()
                 self._df_paradata.loc[match_index:max_index, 'interviewing'] = False
 
+        self._df_paradata = self._df_paradata[(self._df_paradata['interviewing'] == True)]
+
     def make_df_unit(self):
-        df_unit = self.df_active_paradata[['interview__id', 'responsible']].copy()
+        df_unit = self.df_active_paradata[['interview__id', 'responsible', 'survey_name', 'survey_version']].copy()
         df_unit.drop_duplicates(inplace=True)
         df_unit = df_unit[(df_unit['responsible'] != '') & (~pd.isnull(df_unit['responsible']))]
         df_unit = self.add_pause_features(df_unit)
@@ -309,8 +313,7 @@ class FeatureProcessing(ImportManager):
 
     def make_feature_item__answer_removed(self, feature_name):
         # f__answer_removed, answers removed (by interviewer, or by system as a result of interviewer action).
-        removed_mask = ((self.df_paradata['interviewing'] == True) &
-                        (self.df_paradata['event'] == 'AnswerRemoved'))
+        removed_mask = (self.df_paradata['event'] == 'AnswerRemoved')
         df_item_removed = self.df_paradata[removed_mask]
 
         df_item_removed = df_item_removed.groupby('index_col').agg(
@@ -382,13 +385,12 @@ class FeatureProcessing(ImportManager):
             count_elements_or_nan)
         # f__share_selected, share between answers selected, and available answers (only for unlinked questions)
         # TODO! confirm that it makes sense to use just put f__answer_share_selected in place of f__answer_selected
-        self._df_item[feature_name] = round(self._df_item[feature_name] / self._df_item['n_answers'], 3)
+        self._df_item[feature_name] = self._df_item[feature_name] / self._df_item['n_answers']
 
     def make_feature_item__comment_length(self, feature_name):
         # f__comment_length
         comment_mask = (self.df_paradata['event'] == 'CommentSet') & \
-                       (self.df_paradata['role'] == 1) & \
-                       (self.df_paradata['interviewing'] == True)
+                       (self.df_paradata['role'] == 1)
 
         df_item_comment = self.df_paradata[comment_mask].copy()
         df_item_comment[feature_name] = df_item_comment['answer'].str.len()
@@ -401,8 +403,7 @@ class FeatureProcessing(ImportManager):
     def make_feature_item__comment_set(self, feature_name):
         # f__comments_set
         comment_mask = (self.df_paradata['event'] == 'CommentSet') & \
-                       (self.df_paradata['role'] == 1) & \
-                       (self.df_paradata['interviewing'] == True)
+                       (self.df_paradata['role'] == 1)
 
         df_item_comment = self.df_paradata[comment_mask].copy()
         df_item_comment = df_item_comment.groupby('index_col').agg(
@@ -427,13 +428,13 @@ class FeatureProcessing(ImportManager):
     ##### UNIT item methods
 
     def make_feature_unit__number_answered(self, feature_name):
-        answer_set_mask = ((~pd.isnull(self.df_microdata['value']))
-                           & (self.df_microdata['value'] != -999999999)
-                           & (self.df_microdata['value'] != '##N/A##')
-                           & (self.df_microdata['value'] != '')
-                           & (self.df_microdata['type'] != 'Variable')
+        answer_set_mask = ((~pd.isnull(self._df_item['value']))
+                           & (self._df_item['value'] != -999999999)
+                           & (self._df_item['value'] != '##N/A##')
+                           & (self._df_item['value'] != '')
+                           & (self._df_item['type'] != 'Variable')
                            )
-        df_answer_set = self.df_microdata[answer_set_mask]
+        df_answer_set = self._df_item[answer_set_mask]
         df_answer_set = df_answer_set.groupby('interview__id').agg(
             f__number_answered=('value', 'count')
         )
@@ -443,10 +444,10 @@ class FeatureProcessing(ImportManager):
 
     def make_feature_unit__number_unanswered(self, feature_name):
         answer_unset_mask = (
-                (self.df_microdata['value'] == -999999999)
-                | (self.df_microdata['value'] == '##N/A##')
-        ) & (self.df_microdata['type'] != 'Variable')
-        df_answer_set = self.df_microdata[answer_unset_mask]
+                (self._df_item['value'] == -999999999)
+                | (self._df_item['value'] == '##N/A##')
+        ) & (self._df_item['type'] != 'Variable')
+        df_answer_set = self._df_item[answer_unset_mask]
         df_answer_set = df_answer_set.groupby('interview__id').agg(
             f__number_unanswered=('value', 'count')
         )
@@ -457,8 +458,7 @@ class FeatureProcessing(ImportManager):
 
     def make_feature_unit__translation_positions(self, feature_name):
 
-        trans_mask = ((self.df_paradata['interviewing'] == True) &
-                      (self.df_paradata['event'].isin(['AnswerSet', 'TranslationSwitched'])))
+        trans_mask =  (self.df_paradata['event'].isin(['AnswerSet', 'TranslationSwitched']))
 
         df_trans_temp = self.df_paradata.loc[
             trans_mask, ['interview__id', 'order', 'event', 'param']].copy().reset_index()
@@ -494,15 +494,16 @@ class FeatureProcessing(ImportManager):
 
     def get_df_pause(self):
         # f__pause_count, f__pause_duration, f__pause_list
-        df_paused_temp = self.df_paradata[
+
+        pause_mask = (self.df_paradata['role'] == 1)
+
+        df_paused_temp = self.df_paradata[pause_mask][
             ['interview__id', 'order', 'event', 'timestamp_utc', 'interviewing']].copy()
         df_paused_temp['prev_event'] = df_paused_temp.groupby('interview__id')['event'].shift(fill_value='')
         df_paused_temp['prev_datetime'] = df_paused_temp.groupby('interview__id')['timestamp_utc'].shift()
 
         pause_mask = (df_paused_temp['event'].isin(['Restarted', 'Resumed']) &
-                      df_paused_temp['prev_event'].isin(['Paused']) &
-                      (self.df_paradata['role'] == 1) &
-                      (df_paused_temp['interviewing'] == True))
+                      df_paused_temp['prev_event'].isin(['Paused']))
 
         df_paused_temp = df_paused_temp.loc[pause_mask]
         df_paused_temp['pause_duration'] = df_paused_temp['timestamp_utc'] - df_paused_temp['prev_datetime']

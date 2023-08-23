@@ -4,6 +4,7 @@ from src.utils.stats_utils import *
 from scipy.spatial import cKDTree
 from sklearn.cluster import DBSCAN
 from pyod.models.ecod import ECOD
+from pyod.models.cof import COF
 from scipy import stats
 from sklearn.preprocessing import StandardScaler
 
@@ -55,6 +56,7 @@ class ItemFeatureProcessing(FeatureProcessing):
                         columns[i] = sub
                         break
             return columns
+
         data.columns = replace_with_feature_name(list(data.columns), feature_name)
         data = data.reset_index()
 
@@ -76,20 +78,22 @@ class ItemFeatureProcessing(FeatureProcessing):
                   zip(data[['x', 'y', 'z']].values, data['accuracy'])]
 
         data['s__proximity_counts'] = counts
-
+        coords_columns = ['f__gps_latitude', 'f__gps_longitude']
         # Identify spatial outliers
-        dbscan = DBSCAN(eps=0.3, min_samples=5)  # tune these parameters for your data
-        dbscan.fit(data[['f__gps_latitude', 'f__gps_longitude']])
+        # model = DBSCAN(eps=0.3, min_samples=5)  # tune these parameters for your data
+        # model.fit(data[coords_columns])
 
+        model = COF()
+        model.fit(data[coords_columns])
         # -1 indicates noise in the DBSCAN algorithm
-        data['s__spatial_outlier'] = dbscan.labels_
-        data['s__spatial_outlier'] = data['s__spatial_outlier'].replace({1: 0, -1: 1})
+        data['s__spatial_outlier'] = model.predict(data[coords_columns])#model.labels_
+        #data['s__spatial_outlier'] = data['s__spatial_outlier'].replace({1: 0, -1: 1})
 
-        return data.drop(columns =['x', 'y', 'z','accuracy'])
+        return data.drop(columns=['x', 'y', 'z', 'accuracy'])
 
     def make_score__sequence_jump(self):
-        col = 'f__sequence_jump'
-        data, index_col = self.get_clean_pivot_table(col, remove_low_freq_col=True)
+        feature_name = 'f__sequence_jump'
+        data, index_col = self.get_clean_pivot_table(feature_name, remove_low_freq_col=True)
         data = find_anomalies(data, index_col=index_col)
         return data
 
@@ -107,28 +111,6 @@ class ItemFeatureProcessing(FeatureProcessing):
                 {1: 0, -1: 1})
         return pivot_table
 
-    def make_score__answer_position(self):
-        feature = 'f__answer_position'
-        pivot_table, index_col = self.get_clean_pivot_table(feature, remove_low_freq_col=True)
-        for col in pivot_table.drop(columns=['interview__id', 'roster_level', 'responsible']).columns:
-            data = pivot_table[~pd.isnull(pivot_table[col])].copy()
-            entropy_ = data.groupby('responsible')[col].apply(calculate_entropy)
-            entropy_ = entropy_.reset_index()
-            pivot_table[col + feature.replace('f__', '__')] = pivot_table['responsible'].map(
-                entropy_.set_index('responsible')[col])
-        return pivot_table
-
-    def make_score__answer_selected(self):
-        feature = 'f__answer_selected'
-        pivot_table, index_col = self.get_clean_pivot_table(feature, remove_low_freq_col=True)
-        for col in pivot_table.drop(columns=['interview__id', 'roster_level', 'responsible']).columns:
-            data = pivot_table[~pd.isnull(pivot_table[col])].copy()
-            pivot_table[col + feature.replace('f__', '__')] = False
-            lower_outlier, upper_outlier = get_outlier_iqr(data, col)
-            mask = (~pd.isnull(pivot_table[col])) & ((lower_outlier) | (upper_outlier))
-            pivot_table.loc[mask, col + feature.replace('f__', '__')] = True
-        return pivot_table
-
     def make_score__answer_time_set(self):
         # Detect time set anomalies using ECOD algorithm.
         # ECOD is a parameter-free, highly interpretable outlier detection algorithm based on empirical CDF functions
@@ -138,48 +120,62 @@ class ItemFeatureProcessing(FeatureProcessing):
         contamination = self.config.features.answer_time_set.parameters.contamination
         model = ECOD(contamination=contamination)
         data[score_name] = model.fit_predict(data[[feature_name]])
-
-        # model = IsolationForest(contamination=0.20, random_state=42)
-        # X = data[[col]]
-        # model.fit(X)
-        # data['s__answer_time_set'] = model.predict(X)
-        # # find the time range in which lie normal value
-        # mask_range = (data['s__answer_time_set'] == 1)
-        # min_time_range, max_time_range = data[mask_range][col].min(), data[mask_range][col].max()
-        # mask = (data[col] >= min_time_range) & (data[col] <= max_time_range)
-        # # mark as not anomaly tthose that lie within the range
-        # data.loc[mask, 's__answer_time_set'] = 1
-        # data['s__answer_time_set'] = data['s__answer_time_set'].replace({1: 0, -1: 1})
         return data
 
     def make_score__answer_changed(self):
         feature_name = 'f__answer_changed'
         score_name = feature_name.replace('f__', 's__')
         data = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
-        contamination = self.config.features.answer_time_set.parameters.contamination
+        contamination = self.config.features.answer_changed.parameters.contamination
         model = ECOD(contamination=contamination)
-        data[score_name] = model.fit_predict(data[[feature_name]])
+        data[score_name] = model.fit_predict(data[['qnr_seq', feature_name]])
         return data
-
 
     def make_score__answer_removed(self):
         feature_name = 'f__answer_removed'
         score_name = feature_name.replace('f__', 's__')
         data = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
-        contamination = self.config.features.answer_time_set.parameters.contamination
+        contamination = self.config.features.answer_removed.parameters.contamination
         model = ECOD(contamination=contamination)
-        data[score_name] = model.fit_predict(data[[feature_name]])
+        data[score_name] = model.fit_predict(data[['qnr_seq', feature_name]])
         return data
 
-    def make_score__answer_duration(self):
-        columns_to_check = ['f__answer_duration_lower_outliers', 'f__answer_duration__upper_outliers']
+    def make_score__answer_position(self):
+        # answer_position is calculated at responsible level
+        feature = 'f__answer_position'
+        pivot_table, index_col = self.get_clean_pivot_table(feature, remove_low_freq_col=True)
+        for col in pivot_table.drop(columns=['interview__id', 'roster_level', 'responsible']).columns:
+            data = pivot_table[~pd.isnull(pivot_table[col])].copy()
 
-        col = 'f__answer_duration'
-        data, index_col = self.get_clean_pivot_table(col, remove_low_freq_col=True)
+            unique_values = data[col].nunique()
+            # Compute the entropy normalized by the number of possible values of the given distribution
+            entropy_ = data.groupby('responsible')[col].apply(calculate_entropy) / np.log2(unique_values)
+            pivot_table[col + feature.replace('f__', '__')] = pivot_table['responsible'].map(
+                entropy_)
+        return pivot_table
+
+    def make_score__answer_selected(self):
+        feature_name = 'f__answer_selected'
+        pivot_table, index_col = self.get_clean_pivot_table(feature_name, remove_low_freq_col=True)
+        for col in pivot_table.drop(columns=['interview__id', 'roster_level', 'responsible']).columns:
+            data = pivot_table[~pd.isnull(pivot_table[col])].copy()
+            pivot_table[col + feature_name.replace('f__', '__')] = False
+            lower_outlier, upper_outlier = get_outlier_iqr(data, col)
+            mask_lower = (~pd.isnull(pivot_table[col])) & (lower_outlier)
+            mask_upper = (~pd.isnull(pivot_table[col])) & (upper_outlier)
+            pivot_table.loc[mask_lower, col + feature_name.replace('f__', '__') + '_lower'] = True
+            pivot_table.loc[mask_upper, col + feature_name.replace('f__', '__') + '_upper'] = True
+        return pivot_table
+
+    def make_score__answer_duration(self):
+
+        feature_name = 'f__answer_duration'
+        data, index_col = self.get_clean_pivot_table(feature_name, remove_low_freq_col=True)
         scaler = StandardScaler()
         columns = data.drop(columns=['interview__id', 'roster_level', 'responsible']).columns
-        outliers_columns = [col + '_lower_outliers' for col in columns] + [col + '_upper_outliers' for col in columns]
-        data = pd.concat([data, pd.DataFrame({col: False for col in outliers_columns}, index=data.index)], axis=1)
+        outliers_columns = ([col + feature_name.replace('f__', '__') + '_lower' for col in columns] +
+                            [col + feature_name.replace('f__', '__') + '_upper' for col in columns])
+        data = pd.concat([data, pd.DataFrame({col: None for col in outliers_columns}, index=data.index)], axis=1)
 
         # data[outliers_columns] = False
         for col in columns:
@@ -197,17 +193,11 @@ class ItemFeatureProcessing(FeatureProcessing):
                 z_scores = stats.zscore(X['box_cox'].values)
                 indices_lower_outliers = X[(np.abs(z_scores) > threshold) & (X[col] < X[col].median())].index
                 indices_upper_outliers = X[(np.abs(z_scores) > threshold) & (X[col] > X[col].median())].index
-                data.loc[indices_lower_outliers, col + '_lower_outliers'] = True
-                data.loc[indices_upper_outliers, col + '_upper_outliers'] = True
-        #
-        columns_lower_outliers = [col for col in data.columns if col.endswith('_lower_outliers')]
-        columns_upper_outliers = [col for col in data.columns if col.endswith('_upper_outliers')]
-        data['s__answer_duration_lower_outliers'] = data[columns_lower_outliers].sum(axis=1)
-        data['s__answer_duration__upper_outliers'] = data[columns_upper_outliers].sum(axis=1)
+                data.loc[~pd.isnull(data[col]), col + feature_name.replace('f__', '__') + '_lower'] = False
+                data.loc[~pd.isnull(data[col]), col + feature_name.replace('f__', '__') + '_upper'] = False
+                data.loc[indices_lower_outliers, col + feature_name.replace('f__', '__') + '_lower'] = True
+                data.loc[indices_upper_outliers, col + feature_name.replace('f__', '__') + '_upper'] = True
 
-        score_columns = ['s__answer_duration_lower_outliers', 's__answer_duration__upper_outliers']
-        data = data.groupby('interview__id')[score_columns].sum()
-        data = data.reset_index()
         return data
 
     def make_score__single_question(self):
@@ -218,10 +208,10 @@ class ItemFeatureProcessing(FeatureProcessing):
 
         data = pd.DataFrame(pivot_table.responsible.unique(), columns=['responsible'])
         for col in pivot_table.drop(columns=['interview__id', 'roster_level', 'responsible']).columns:
-            entropy_ = pivot_table.groupby('responsible')[col].apply(calculate_entropy)
-            entropy_ = entropy_.reset_index()
+            unique_values = pivot_table[col].nunique()
+            entropy_ = pivot_table.groupby('responsible')[col].apply(calculate_entropy) / np.log2(unique_values)
 
-            data[col + feature.replace('f__', '__')] = data['responsible'].map(entropy_.set_index('responsible')[col])
+            data[col + feature.replace('f__', '__')] = data['responsible'].map(entropy_)
 
         return data
 
@@ -231,23 +221,21 @@ class ItemFeatureProcessing(FeatureProcessing):
         data = self.df_item[filter_condition]
         pivot_table = pd.DataFrame(data.responsible.unique(), columns=['responsible'])
         for variable_name in data.variable_name.unique():
-            df_values = pd.get_dummies(data[data['variable_name'] == variable_name]['value'].explode()).groupby(
-                level=0).sum()
+            mask = (data['variable_name'] == variable_name) & (data['value'] != '##N/A##')
+            df_values = pd.get_dummies(data[mask]['value'].explode()).groupby(level=0).sum()
 
             # Joining back the exploded values to the original dataframe
-            df = data[data['variable_name'] == variable_name][['responsible', 'value']].drop('value', axis=1).join(
-                df_values)
+            df = data[mask][['responsible', 'value']].drop('value', axis=1).join(df_values)
 
             # Function to calculate entropy
             def calculate_entropy(row):
-                values = row.values
-                values = values[values > 0]  # Filter out zero values
-                probabilities = values / values.sum()
-                entropy = -np.sum(probabilities * np.log2(probabilities))  # * len(values)
+                probabilities = row.mean() + 1e-10
+                entropy = -np.sum(probabilities * np.log2(probabilities))
                 return entropy
 
             # # Calculating entropy grouped by 'variable_name' and 'responsible'
-            result = df.groupby(['responsible']).apply(calculate_entropy).reset_index()
+            result = df.groupby(['responsible']).apply(calculate_entropy) / np.log2(df.shape[1] - 1)
+            result = result.reset_index()
             result.columns = ['responsible', 'entropy']
             pivot_table[variable_name + feature.replace('f__', '__')] = pivot_table['responsible'].map(
                 result.set_index('responsible')['entropy'])
@@ -255,6 +243,7 @@ class ItemFeatureProcessing(FeatureProcessing):
         return pivot_table
 
     def make_score__first_digit(self):
+        # answer_position is calculated at responsible level
         feature = 'f__first_digit'
         pivot_table, index_col = self.get_clean_pivot_table('f__numeric_response', remove_low_freq_col=True)
         columns = []

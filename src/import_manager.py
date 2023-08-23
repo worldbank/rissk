@@ -420,8 +420,7 @@ def get_paradata(survey_path, df_questionnaires, survey_name, survey_version):
     if df_questionnaires.empty is False:
         df_para = df_para.merge(df_questionnaires, how='left', left_on=['param', 'survey_name', 'survey_version'],
                                 right_on=['variable_name', 'survey_name', 'survey_version'])
-    df_para['answer_changed'] = False
-#TODO: GABRIELE, drop the row above, here we want to bing in the interviewing column generation and keeping only interviewing.
+
     # Normalize column names
     df_para.columns = [normalize_column_name(c) for c in df_para.columns]
     return df_para
