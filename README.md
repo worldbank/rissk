@@ -57,7 +57,7 @@ cd /Users/USER/projects/mlss
     
    - `<export_path>` with the string of the path to the directory containing your Survey Solutions export data.
    - `<survey_name>` with the string of the Questionnaire variable defined in the Survey Solutions Designer, or the beginning of the name of the exported zip files, e.g., ***<survey_name>**_version_Tabular_All.zip*.
-   - `<result_path>` with the string of the directory where the output files should be stored. The argument `data.results` is option. If not specified, results will be stored in directory `mlss/result`.
+   - `<result_path>` with the string of the directory where the output files should be stored. The argument `data.results` is optional. If not specified, results will be stored in directory `mlss/result`.
 
 
 ```
@@ -86,6 +86,19 @@ features:
     use: false
 ```
 
+# Interpretation
+
+Lorem ipsum...
+
+1. MLSS produces `FILE` in folder `FOLDER` containing the URS for each interview. 
+
+
+2. The URS ranges from 0 (low risk) to 100 (high risk). High-at-risk, means either interviews were not conducted as designed or (partially) fabricated. 
+
+
+3. The URS of an interview may not be improved by rejecting an interview and modifying it. Note, that if the URS changed for an interview between different executions of the package, it is due to other interviews becoming available/excluded for the scoring. 
+2. 
+
 # Process description
 
 This chapter describes in broad terms the individual steps of the package. 
@@ -110,7 +123,7 @@ This chapter describes in broad terms the individual steps of the package.
 [@Gabriele]: <> (This is done later, correct?)
 6. Append versions. The questionnaire, microdata and paradata dataframes are appended for all versions. 
 7. Build df_interviewing.
-8. Build features. Features are built on the item or unit level. For details on all features, their scope and how they were built, refer to [Features & Scores](features_scores.md).
+8. Build features. Features are built on the item or unit level. For details on all features, their scope and how they were built, refer to [Features & Scores](features_scores.md). Features are absolute values on the item or unit level. 
  
 
 # Integrate into survey
@@ -118,8 +131,66 @@ This chapter describes in broad terms the individual steps of the package.
 > [!WARNING]  
 > The MLSS package is aimed to be an additional source of information. It does not make redundant other components of the data quality assurance system, such as  back-checks, audio audits, indicator monitoring, completion and progress checks or high-frequency checks, as these fulfil other important functions.
 
-[!NOTE]  
-> Highlights information that users should take into account, even when skimming.
+Lorem ipsum...
+
+# Limitations
+
+- MLSS assumes that the majority of interviews are conducted as desired, which determines normal behaviour. The scores may break down for surveys with extreme levels of problematic interviewer behaviour.
+
+- With low number of interviews (e.g., during the first few days of fieldwork) the scores are less effective and reliable. 
+
+- MLSS is not reliable for interviews that were in a significant part filled in after the first supervisor or HQ related events in the paradata, e.g. if an interview file was originally submitted almost empty and later rejected to be completed by the interviewer. By design, MLSS only considers the part of the interview that happened prior to the first interaction of a Supervisor or HQ role with the interview file.
+- 
+- If you use [partial synchronization](https://docs.mysurvey.solutions/headquarters/config/admin-settings/) and would like to use MLSS, Supervisor and HQ roles should not open interview files prior to their completion.  
+
+- MLSS has been tested on laptop with XYZ GB of RAM, for paradata up to x M rows, or a survey of XX questions and YY interviews. To process very large datasets may require a server with higher memory. 
+
+- The tool does not (yet) accept microdata exports from Survey Solutions in the SPSS format. Export to STATA or TAB instead. 
+
+- For barcode, picture, audio and geography questions, no microdata based features have been developed. These questions are only considered through their related events in the paradata. 
+
+- The tool has been conceptualized for CAPI or CATI interviews. It has not been tested for surveys run in Survey Solution’s CAWI mode.
+
+
+# Roadmap
+
+The following additions to the methodology, package and dissemination can be explored in the future.
+
+- **Additional robustness checks**. While features, scores and algorithms have been tested, further experiments could be conducted to experiment how alternative feature design, scoring algorithms and levels and clustering affect the overall score.
+
+
+- **Additional features**. Identify new potential features e.g.: 
+
+  - Count of QuestionDeclaredInvalid events in paradata once SurveySolution functionality becomes available.
+  - Allow additional user input to specify broad survey parameters, e.g., specify cluster variable (to identify spacial and temporal anomalies)  or expected survey duration in days or sample size.
+
+
+- **Specific features**. Identify specific (but less common) suspicious events and create features of higher-level information, e.g.:  
+  - Unusual sequence jumps to TimeStamps questions are more suspicious than for other questions
+  - GPS questions recorded at different time than most of the interview.
+  - Removing or changing the answers to gating questions (either linked or trigger enablement) may be indicative of interviewers trying to cut the length if an interview, especially at the beginning of a survey.
+  - Distinguish between different roster types. E.g. for list rosters, roster_level can be ignored, as often very homogeneous. For other roster types, the roster_level may carry more meaning 
+
+
+- **Facilitate ease of use**: Wrapper functions can be written to facilitate easier workflows from other packages used to build survey pipelines, such as R or STATA.
+
+
+- **Obtain testing/training data**. Additional testing data with interview-level quality labels would improve the validity and expose the package to a larger variety of survey settings, e.g. by:
+  - Obtaining data from a survey that used a systematic and thorough review/verification systems (e.g. random audio auditing). 
+  - Integrating MLSS into a survey quality system to obtain the above.
+  - Produce fake data during training or post-survey.
+
+- **Trained models**. With additional training available, one can test alternative approaches of training models to identify at-risk interviews, using as inputs either constructed micro and paradata dataframes, the features or scores.
+
+
+- **Other CAPI tools**. Expand to allow inputs from other CAPI tools.
+
+
+- **Server/API**. Tool to receive quality indication/output (what Gabriele mentioned on last call with WB).
+
+[@Gabriele]: <> (Details please, what was this idea again?)
+
+- **Dissemination**. Work can be done to raise awareness of the package among potential users and to stimulate the use, such as blog posts, presentations, courses, conference papers or supporting deployment among first users.
 
 > [!IMPORTANT]  
 > Crucial information necessary for users to succeed.

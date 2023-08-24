@@ -1,6 +1,10 @@
 
 This chapter describes the construction of all features and scores. 
 
+[!NOTE]  
+> Use the outline button on the top right to quickly navigate between features.
+
+
 # Paradata based features
 
 ## f__days_from_start
@@ -238,9 +242,7 @@ Detects anomalies in the location where GPS type questions were answered.
 
 **Feature**
 
-Sub-features `gps_latitude`, `gps_longitude` and `gps_accuracy` are constructed for all questions of type `GpsCoordinateQuestion` in the microdata.
-
-Latitude from the GPS question. Note that there may be none or multiple GPS question per unit. They may refer to different places, so can legitimatyl be apart, e.g. the coordinates of the household plots. 
+Sub-features `gps_latitude`, `gps_longitude` and `gps_accuracy` are constructed for all questions of type `GpsCoordinateQuestion` in the microdata. Note that there may be none or multiple GPS question per interview and that they may refer to places other than the interview location, e.g., the location of the household plots. 
 
 **Score**
 
