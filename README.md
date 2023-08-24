@@ -1,4 +1,4 @@
-![RISSK Logo]([/assets/images/san-juan-mountains.jpg](https://github.com/RowSquared/mlss/blob/main/rissk.png) "RISSK")
+![RISSK Logo](https://github.com/RowSquared/mlss/blob/main/rissk.png?raw=true)
 
 
 This package creates an **Unit Risk Score (URS)** from **[Survey Solutions](https://mysurvey.solutions/en/)** export files that provides an indication of how much individual interviews are at risk of including undesired interviewer behaviour such as data fabrication. The package extracts a range of features from the microdata and paradata and identifies anomalies. Individual scores are combined into the URS ranging from 0 to 100. The package is generic and can be easily applied to most CAPI or CATI surveys run in Survey Solutions without any modifications. 
