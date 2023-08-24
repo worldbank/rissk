@@ -28,9 +28,9 @@ class ItemFeatureProcessing(FeatureProcessing):
 
     def get_clean_pivot_table(self, feature_name, remove_low_freq_col=True, filter_conditions=None, threshold=0.2):
         index_col = ['interview__id', 'roster_level', 'responsible']
-        data = self.df_item.copy()
+        data = self.df_item
         if filter_conditions is not None:
-            data = data.loc[filter_conditions].copy()
+            data = data.loc[filter_conditions]
         data = pd.pivot_table(data=data, index=index_col, columns='variable_name',
                               values=feature_name, fill_value=np.NAN)
         data = data.reset_index()
@@ -134,7 +134,7 @@ class ItemFeatureProcessing(FeatureProcessing):
     def make_score__answer_removed(self):
         feature_name = 'f__answer_removed'
         score_name = feature_name.replace('f__', 's__')
-        data = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
+        data = self.get_feature_item__answer_removed(feature_name)
         contamination = self.config.features.answer_removed.parameters.contamination
         model = ECOD(contamination=contamination)
         data[score_name] = model.fit_predict(data[['qnr_seq', feature_name]])
@@ -184,7 +184,7 @@ class ItemFeatureProcessing(FeatureProcessing):
             X[col + '_upper_outliers'] = X['is_outlier'].copy()
             # # Filter out outliers to compute box cox tranformation
             X = X[(X['is_outlier'] == False)].copy()
-            if X[col].shape[0] > 0:
+            if X[col].nunique() > 1:
                 box_cox_transformed_data, _ = stats.boxcox(X[col] + 1)
                 X['box_cox'] = box_cox_transformed_data
                 X['box_cox'] = transformed_data_rescaled = scaler.fit_transform(X[['box_cox']])
