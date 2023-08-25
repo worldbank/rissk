@@ -1,11 +1,12 @@
 ![RISSK Logo](https://github.com/RowSquared/mlss/blob/main/rissk.png?raw=true)
 
+# What is RISSK?
 
-This package creates an **Unit Risk Score (URS)** from **[Survey Solutions](https://mysurvey.solutions/en/)** export files that provides an indication of how much individual interviews are at risk of including undesired interviewer behaviour such as data fabrication. The package extracts a range of features from the microdata and paradata and identifies anomalies. Individual scores are combined into the URS ranging from 0 to 100. The package is generic and can be easily applied to most CAPI or CATI surveys run in Survey Solutions without any modifications. 
+RISSK creates an easy-to-interpret **Unit Risk Score (URS)** directly from your **[Survey Solutions](https://mysurvey.solutions/en/)** export files. The score indicates the how much individual interviews are at risk of including undesired interviewer behaviour such as data fabrication. RISSK is generic and can easily be integrated into the monitoring system of most CAPI or CATI surveys run in Survey Solutions. It works by extracting a range of generic features from the microdata and paradata exports, identifying anomalies and combining individual scores into the URS using Principal Component Analysis. 
 
-# Getting Started
+# Getting started
 
-These instructions will guide you on how to install and run this package on your local machine.
+These instructions will guide you on how to install and run RISSK on your local machine.
 
 ## Prerequisites
     
@@ -99,9 +100,34 @@ Lorem ipsum...
 
 
 3. The URS of an interview may not be improved by rejecting an interview and modifying it. Note, that if the URS changed for an interview between different executions of the package, it is due to other interviews becoming available/excluded for the scoring. 
-2. 
+
+RISSK identifies anomalies in the following types of interviewer behaviour and interview properties. Interviews with higher URS are more unusual in those dimensions, interviews with lower URS are more normal. 
+
+- **Timing**, such as the day and hours of the day during which the interview was conducted, the duration of the interview and of individual questions, etc.
+- **Location**, (if any GPS questions are set), are recorded locations spacial outliers and how many other locations are in the extreme vicinity. 
+- **Process**, such as the question sequence followed in the interview, how answers were changed or removed, the patterns of pauses in the interview, etc.
+- **Answers**, how do the recorded answers compare to answers in other, e.g. the position or share of answers selected, the variance and entropy of answers, the distribution of digits, etc.
+- **Interview properties**, such as how many answers were set, how many are unanswered, etc.  
+
+[!NOTE]  
+> Refer to [FEATURS_SCORES.md](FEATURS_SCORES.md) for a detailed description of all features and scores. 
+
+
+It only takes the active interviewing time into account, which is defined as xxx. Interviews that were looked at or opened by the supervisor early, e.g. in partial sync, will look strange.
+We only consider questions, as they are actively set by interviewers. 
+The score does not consider outstanding error messages. These are easily usable for survey solution users and should be systematically reviewed. 
+Precautions, do not say if >0.5 is fake, researcher who wants to get into one guide, if u are user want to use it, 
+When rerunning with more interviews, the scores for previously scored units WILL change. This is due to more information becoming available. For example, a pattern that was initially isolated and suspicious, may have become more common and less suspicious. 
+Please note that scores of individual interview_files can change over time as other interviews are submitted.  
+Do not give feedback like “Your score is low, you did something wrong”
+The score is not proof of wrongdoing, you need to generate evidence otherwise. Some unusual, but legitimate circumstances in one interview may drive the score. It is also not 
+Repeated lower scores for one interviewer over time signal issues with this individual interviewer. If fraudulent behaviour cannot be proven, maybe observe the interviewer for an interview to see what they did wrong. COmpare the score of observed to other unobserved 
 
 # Process description
+
+How does it work. The 
+
+ The package extracts a range of features from the microdata and paradata and identifies anomalies. Individual scores are combined into the URS ranging from 0 to 100. 
 
 This chapter describes in broad terms the individual steps of the package. 
 
@@ -125,15 +151,22 @@ This chapter describes in broad terms the individual steps of the package.
 [@Gabriele]: <> (This is done later, correct?)
 6. Append versions. The questionnaire, microdata and paradata dataframes are appended for all versions. 
 7. Build df_interviewing.
-8. Build features. Features are built on the item or unit level. For details on all features, their scope and how they were built, refer to [Features & Scores](features_scores.md). Features are absolute values on the item or unit level. 
- 
+8. Build features. Features are built on the item or unit level. For details on all features, their scope and how they were built, refer to [Features & Scores](FEATURS_SCORES.md). Features are absolute values on the item or unit level. 
 
-# Integrate into survey
+# Survey integration
 
 > [!WARNING]  
-> The MLSS package is aimed to be an additional source of information. It does not make redundant other components of the data quality assurance system, such as  back-checks, audio audits, indicator monitoring, completion and progress checks or high-frequency checks, as these fulfil other important functions.
+> RISSK is aimed to be an additional source of information. It does not make redundant other components of the data quality assurance system, such as  back-checks, audio audits, indicator monitoring, completion and progress checks or high-frequency checks, as these fulfil other important functions.
 
-Lorem ipsum...
+If your survey uses multiple questionnaires, such as separate household and community questionnaires, the tool must be run separately for each template. 
+The tool is aimed to provide an additional source of information for and should not make redundant other components of the data quality assurance system, such as  back-checks, audio audits, indicator monitoring, completion and progress checks or high-frequency checks, as these fulfil other important functions.
+The tool should be run frequently to allow timely identification of and solution to issues. For most surveys, somewhere between daily and weekly should be a good frequency. Keep in mind that, depending on your survey, exporting paradata from Survey Solutions and running the tool may take several minutes. 
+Integrating it into the data management and monitoring system is desirable, so all information is available together and executing the script and handling the output is automated. As an example, the tool could be executed as part of the scripts that export from Survey Solutions and its output can be picked up as input in your monitoring dashboard.
+The tool is designed to provide additional information at the time of the first review of an interview file (see time-dependence of score in chapter Interpretation).    
+2 uses: information for review/investigation/backchecks -> look only at interviews that have newly been added since the last batch. One way of achieving this is for every batch of interviews to review the score for those interviews where in file interview__diagnostics, interview__status== “Completed” and rejections__sup==0 and rejections__hq==0, and take actions accordingly. These can include that a back-check interview or audio review is being triggered, or the interviewer being confronted, a 
+
+have not previously been rejected. 
+Second use is to look at the score by interviewer (and potentially team) over time, e.g., by week of field work survey. While scores for individual interviews may not be concerning, aggregating them by interviewer and over time, may show trends that could require action, e.g.,  individual interviewers who perform worse than others on average.
 
 # Limitations
 
@@ -149,10 +182,30 @@ Lorem ipsum...
 
 - The tool does not (yet) accept microdata exports from Survey Solutions in the SPSS format. Export to STATA or TAB instead. 
 
+- Interviews containing non-contact or non-response cases may distort the URS, as they often follow a different (much shorter) path in the questionnaire. <!-- @Gabriele, we need to test this -->  
 - For barcode, picture, audio and geography questions, no microdata based features have been developed. These questions are only considered through their related events in the paradata. 
 
 - The tool has been conceptualized for CAPI or CATI interviews. It has not been tested for surveys run in Survey Solution’s CAWI mode.
 
+# Confirmation of results
+
+## Testing
+
+confirmation on tests (in our tests we observed that x moving up, moved up the score by ... )
+
+## Experiment
+
+To verify the feature generation, anomaly detection and scoring system, we required survey data with reliable interview-level quality labels.  We infused a real CATI survey (name and details cannot be given due to a non-disclosure agreement) with artificial high-at-risk interviews, by asking interviewers to produce fake interviews just after the completion of the real survey. 7 different scenarios were given to induce variation. For some scenarios, interviewers were incentivized to give their best. 11 interviewers created 1 interview file for each of the following scenarios in sequence.  
+
+1. Non-incentivized. Pretend you are interviewing and fill in the questionnaire.
+2. Incentivized. Fake as good as you can, try not to get caught.
+Same as Scenario 2.
+3. Incentivized. Fake as good as you can, try to be realistic in timings.
+4. Incentivized. Fake as good as you can, try to set as real answers as possible. 
+5. Non-incentivized. Fake without putting effort.
+6. Incentivized. Fake as fast as possible. 
+
+The 77 artificial fake interviews were combined with the 241 real interviews from the survey. Real interviews for this survey are believed to be of general low-risk, as they were conducted by a small team of interviewers with a trusted, long-term relationship, incentives to perform well and deterrents to do badly, as well as a good data monitoring structure in place. Furthermore, interviewers were aware that the data they collected would be used to validate secondary data and that discrepancies would be investigated. Nevertheless, it could not be ruled out that some real interviews contained problematic interviewer behaviour. 
 
 # Roadmap
 
