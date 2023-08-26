@@ -1,11 +1,11 @@
 
 This chapter describes the construction of all features and scores. 
 
-[!NOTE]  
+> [!NOTE]  
 > Use the outline button on the top right to quickly navigate between features.
 
 
-# Paradata based features
+# Included
 
 ## f__days_from_start
 [@Gabriele]: <> (inconsitent naming, how does it enter)
@@ -13,9 +13,7 @@ This chapter describes the construction of all features and scores.
 ## answer_time_set
 [@Gabriele]: <> (
 - Let's rename to answer_hour or event_hour,
-- scope not clear to me, should be from active, looks like it is from paradata,
-- should we adjust for TZ?
-- you can delete the the half_hour feature)
+- should we adjust for TZ?- has been adjusted )
 
 Captures active interviewing events during unusual hours of the day.
 
@@ -46,7 +44,7 @@ Captures unusual number of changes to question answers.
 
 [@Gabriele]: <> (Let's talk about item vs question level again)
 
-Anomalies in `f__answer_changed` are detected using the [ECOD](https://arxiv.org/pdf/2201.00382.pdf), a fast, non-parametric and easy-to-interpret algorithm using cumulative distribution functions. The `contamination` parameter is set to 0.10 by default (based on testing data) and can be adjusted in `environment/main.yaml`. Increase it to be stricter, decrease to be more lenient. Anomalies are detected on the question level (`variable_name`) to reduce disaggregation. Each question is considered to have an anomaly if an anomaly was detected for the question on any `roster_level`. 
+Anomalies in `f__answer_changed` are detected using the [ECOD](https://arxiv.org/pdf/2201.00382.pdf), a fast, non-parametric and easy-to-interpret algorithm using cumulative distribution functions. The automatically determined contamination level can be [overwritten manually](README.md#Advanced-Use). Anomalies are detected on the question level (`variable_name`) to reduce disaggregation. Each question is considered to have an anomaly if an anomaly was detected for the question on any `roster_level`. 
 
 
 `s__answer_changed` is the share of questions answered with anomalies in `f__answer_changed` per interview. The value ranges from 0 (no anomalies) to 1 (hypothetical, only anomalies). An anomaly is an unusual high (or low) number of changes to the answer of a question. E.g., if it is common for the answer to a member list question to be changed 0-2 times, these would not be considered as anomalies, but an interview with 5 answer changes would. 
@@ -57,13 +55,9 @@ Captures unusual number of times answers were removed for a question.
 
 **Feature**
 
-`f__answer_removed` is constructed using interviewing events in the paradata. It counts the number of times an event of type `AnswerRemoved` was logged for an item. These can be due to either an interviewer actively removing the answer to an item or due to Survey Solutions removing answers as a consequence of an interviewer action. A changes to the response of a question linked to a roster may produce multiple such events. The item may no longer exist in the microdata.
-
-[@Gabriele]: <> (The item may no longer exist in the microdata. How do we deal with them?)
+`f__answer_removed` is constructed using interviewing events in the paradata. It counts the number of times an event of type `AnswerRemoved` was logged for an item. These can be due to either an interviewer actively removing the answer to an item or due to Survey Solutions removing answers as a consequence of an interviewer action. A changes to the response of a question linked to a roster may produce multiple such events.
 
 **Score**
-
-[@Gabriele]: <> (Let's talk about item vs question level again)
 
 Anomalies in `f__answer_removed` are detected using the [ECOD](https://arxiv.org/pdf/2201.00382.pdf), a fast, non-parametric and easy-to-interpret algorithm using cumulative distribution functions. The `contamination` parameter is set to 0.10 by default (based on testing data) and can be adjusted in `environment/main.yaml`. Increase it to be stricter, decrease to be more lenient. Anomalies are detected on the question level (`variable_name`) to reduce disaggregation. Each question is considered to have an anomaly if an anomaly was detected for the question on any `roster_level`. 
 
@@ -94,15 +88,9 @@ Detects XYZ...
 
 **Score**
 
+`answer_share_selected`
+<!-- @Gabriele, naming? -->
 detect unusual high or low number of item selection
-
-## answer_share_selected
-
-Detects XYZ...
-
-**Feature**
-
-**Score**
 
 ## answer_duration
 
@@ -119,44 +107,27 @@ Please note that `f__answer_duration` can only be an approximation of the actual
 
 **Score**
 
-## comment_length
+For each `variable_name`, anomalies are detected separately on the lower and upper end using ...
 
-**Feature**
+The scores `s__answer_duration_lower` and `s__answer_duration_upper` are calculated as the share of all items set with lower or upper bound anomalies respectively.
 
-`f__comment_length` contains the total length of comments set for an item, extracted from active interviewing events of type `CommentSet` in the paradata. 
-
-**Score**
-
-very short comments (e.g. length <= 3) is often due to interviewers writing the answer. this may be due to a mistake of the questionnaire, in which case we should see it frequently for the item, or interviewers may be confused, which we would like to flag. Longer comments may provide more information.
-
-## comment_set
-
-**Feature**
-
-`f__comment_set` contains the total number of comments set for an item, extracted from active interviewing events of type `CommentSet` in the paradata. 
-
-
-**Score**
-
-in principle, comments should give additional information e.g. when a problem cannot be solved. issues from other features with comments may be less of an issue. If comments are frequent, the absence of comments may be suspicious.
-
-## comment_duration
-
-**Feature**
-
-`f__comment_duration` is constructed similar to [answer_duration](#answerduration), summing instead the intervals for all events of type `CommentSet`.
-
-**Score**
+<!-- @Gabriele, count on item level or is this this funky question_level thing again -->
 
 ## first_decimal
+<!-- @Gabriele, rename to first_decimals-->
+Identifies anomalies in the first two decimal digits in numeric values.
 
 **Feature**
 
-`f__first_decimal` contains the first decimal digit of the response to all questions of type `NumericQuestion` in the microdata that are not integer questions (`IsInteger == False`).
+`f__first_decimal` contains the first two decimal digits of the response to all questions of type `NumericQuestion` in the microdata that are not integer questions (`IsInteger == False`).
 
 **Score**
 
-same as f__last_digit
+For variables with at least 3 different answer values and a minimum of ??? responses set in total, anomalies in `f__first_decimal` are identified by `variable_name` using [Isolation Forest Algorithm](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.IsolationForest.html). The `contamination` parameter is set to 0.10 by default (based on testing data) and can be adjusted in `environment/main.yaml`. Increase it to be stricter, decrease to be more lenient.
+
+As an example, if most answer values to a question contain decimals such as 0.25, 0.33, 0.5, 0.66, 0.75, a different value such as 0.47 would be flagged as anomaly. 
+
+`s__first_decimal` is the share of numeric answers (filtered as above) with anomalies by interview.
 
 ## first_digit
 
@@ -273,6 +244,15 @@ Huge values (low accuracy) is indicative of wrong tablet settings.
 
 **Score**
 
+round to two hour intervals under  1 day, and to days after, control the sensibility of the outlier detection algorithm, looking localy, so also detecting anomalies in the middle
+
+COF https://github.com/yzhao062/pyod#thresholding-outlier-scores
+
+e.g. 8 or 10 might be weird, but 1 day or 6 hrs not. 
+
+boolean value if anomalous unit a 
+
+
 ## pause_list
 
 **Feature**
@@ -300,6 +280,10 @@ Huge values (low accuracy) is indicative of wrong tablet settings.
 
 **Score**
 
+round to 10 min, using ECOD 
+
+if contamination is in yaml, it takes the one from the yaml, if not it automatically determines the, use the medfilt methods. 
+
 
 ## total_elapsed
 
@@ -319,9 +303,43 @@ Huge values (low accuracy) is indicative of wrong tablet settings.
 
 **Score**
 
+# Not included
+
+The following features have been extracted, but no utility has been found for them in the testing data (too few observations). They require more testing data and further investigation to be converted into scores.
+
+## comment_length
+
+**Feature**
+
+`f__comment_length` contains the total length of comments set for an item, extracted from active interviewing events of type `CommentSet` in the paradata. 
+
+**Rationale**
+
+Very short comments (e.g. length <= 3) or comments only containing numeric values are often due to interviewers writing the answer to the question into the comment. This may be due to questionnaire mistake, in which case we should see comments frequently for the item, or interviewers being confused, which we would like to flag. Longer comments may provide more information.
+
+## comment_set
+
+**Feature**
+
+`f__comment_set` contains the total number of comments set for an item, extracted from active interviewing events of type `CommentSet` in the paradata. 
+
+
+**Rationale**
+
+In principle, comments should provide additional information to the Supervisor/HQ/data user, e.g., when the interviewer cannot solve a problem or wants to confirm a unusual answer. Item level anomalies from other features with comments set for the same item may be less of an issue. If comments are frequent, the absence of comments may be suspicious.
+
+## comment_duration
+
+**Feature**
+
+`f__comment_duration` is constructed similar to [answer_duration](#answerduration), summing instead the intervals for all events of type `CommentSet`.
+
+<!-- @Gabriele, we could attribute those duration to the item if we want --> 
+
 
 # TO BE DONE
 
+<!-- @gabriele, what about those ? -->
 
 ## f__share_selected
 

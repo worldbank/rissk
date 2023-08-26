@@ -73,6 +73,9 @@ python main.py data.externals=<export_path> surveys=<survey_name> data.results=<
 
 This chapter provides additional information for users who would like to dig deeper and adjust or expand the functioning of the package. 
 
+## export score and feature files
+Scores files can be exported
+
 ## Exclude features
 
 By default, all features are included in the construction of the URS. Users can exclude individual features if they are affecting the score in undesired ways. This may be the case, e.g., if a feature has been observed to drive the URS for some interviews, but external validation have revealed those interviews to be of low-risk. 
@@ -88,6 +91,18 @@ features:
   answer_changed:
     use: false
 ```
+
+## Set contamination level
+
+The algorithms used in the calculation of some of the scores require a contamination level to be set. By default, RISSK uses the `medfilt` thresholding method to automatically determine the contamination level. This can be overwritten by specifying the `contamination` parameter for the specific score in the `environment/main.yaml`. In below example, a contamination level of 0.1 will be used for the ECOD algorithm in `answer_changed`.
+
+```yaml
+  answer_changed:
+    use: true
+    parameters:
+      contamination: 0.1
+```
+Refer to [FEATURES_SCORES.md](FEATURES_SCORES.md) to check it the `contamination` parameter can be set for a feature.
 
 # Interpretation
 
@@ -110,8 +125,11 @@ RISSK identifies anomalies in the following types of interviewer behaviour and i
 - **Interview properties**, such as how many answers were set, how many are unanswered, etc.  
 
 [!NOTE]  
-> Refer to [FEATURS_SCORES.md](FEATURS_SCORES.md) for a detailed description of all features and scores. 
+> Refer to [FEATURS_SCORES.md](FEATURES_SCORES.md) for a detailed description of all features and scores. 
 
+Does not capture all fakes or files with issues. 
+
+Can be used to guide back checks. 
 
 It only takes the active interviewing time into account, which is defined as xxx. Interviews that were looked at or opened by the supervisor early, e.g. in partial sync, will look strange.
 We only consider questions, as they are actively set by interviewers. 
@@ -149,14 +167,17 @@ This chapter describes in broad terms the individual steps of the package.
 4. **Build paradata**: For each version, the paradata file is loaded as dataframe. The column `parameters` is split into `param`, `roster_level` and `answer` and question properties are merged in from `df_questionnaire`. For each interview, only events are kept that precede the first occurrence of of any of the following events, `['RejectedBySupervisor', 'OpenedBySupervisor', 'OpenedByHQ', 'RejectedByHQ']`. This limits the paradata, and all paradata based features to interviewing events, i.e. the interviewing that was done before the first interaction by the supervisor or HQ with the interview file. 
 
 [@Gabriele]: <> (This is done later, correct?)
-6. Append versions. The questionnaire, microdata and paradata dataframes are appended for all versions. 
+
+5. Append versions. The questionnaire, microdata and paradata dataframes are appended for all versions. 
 7. Build df_interviewing.
-8. Build features. Features are built on the item or unit level. For details on all features, their scope and how they were built, refer to [Features & Scores](FEATURS_SCORES.md). Features are absolute values on the item or unit level. 
+8. Build features. Features are built on the item or unit level. For details on all features, their scope and how they were built, refer to [Features & Scores](FEATURES_SCORES.md). Features are absolute values on the item or unit level. 
+
+9. Individual scores are combined into the `unit_risk_score` using Principal Component Analysis (PCA). To produce an score on  Scores are normalized and windsorized to reduce extreme outliers.
 
 # Survey integration
 
 > [!WARNING]  
-> RISSK is aimed to be an additional source of information. It does not make redundant other components of the data quality assurance system, such as  back-checks, audio audits, indicator monitoring, completion and progress checks or high-frequency checks, as these fulfil other important functions.
+> RISSK is aimed to provide additional information. It does not make redundant other components of a data quality assurance system, such as back-checks, audio audits, indicator monitoring, completion & progress tracking or high-frequency checks. These fulfil other important functions.
 
 If your survey uses multiple questionnaires, such as separate household and community questionnaires, the tool must be run separately for each template. 
 The tool is aimed to provide an additional source of information for and should not make redundant other components of the data quality assurance system, such as  back-checks, audio audits, indicator monitoring, completion and progress checks or high-frequency checks, as these fulfil other important functions.
@@ -167,6 +188,17 @@ The tool is designed to provide additional information at the time of the first 
 
 have not previously been rejected. 
 Second use is to look at the score by interviewer (and potentially team) over time, e.g., by week of field work survey. While scores for individual interviews may not be concerning, aggregating them by interviewer and over time, may show trends that could require action, e.g.,  individual interviewers who perform worse than others on average.
+
+Who interviews to check
+check the interviews with the highest values, be diverse in what you check, different interviewers, different days
+provide feedback, take actions, make sure interviewers know
+
+How to check
+
+What to do if you find discrepancies. 
+don't let interviewers get aways with things. Could be stern warning or dismissal. check other cases by the same interviewer (guided by the score) Reinterview affected households. 
+
+
 
 # Limitations
 
@@ -241,11 +273,17 @@ The following additions to the methodology, package and dissemination can be exp
 - **Other CAPI tools**. Expand to allow inputs from other CAPI tools.
 
 
-- **Server/API**. Tool to receive quality indication/output (what Gabriele mentioned on last call with WB).
+- **Server/API**. Tool to receive quality indication/output (what Gabriele mentioned on last call with WB). Platform to get back reduced feedback to learn.
 
 [@Gabriele]: <> (Details please, what was this idea again?)
 
 - **Dissemination**. Work can be done to raise awareness of the package among potential users and to stimulate the use, such as blog posts, presentations, courses, conference papers or supporting deployment among first users.
+
+
+time series analysis
+time accounting
+instead of single variate outlier detection, multi variate 
+identify different clusters, fabricating interviewers may be different to interviewers who are struggling, need more detailed labels.
 
 > [!IMPORTANT]  
 > Crucial information necessary for users to succeed.
