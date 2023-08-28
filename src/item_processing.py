@@ -102,9 +102,8 @@ class ItemFeatureProcessing(FeatureProcessing):
         data['s__gps_proximity_counts'] = counts
         coords_columns = ['f__gps_latitude', 'f__gps_longitude']
         # Identify spatial outliers
-        # model = DBSCAN(eps=0.3, min_samples=5)  # tune these parameters for your data
+        # model = DBSCAN(eps=0.3, min_samples=15)  # tune these parameters for your data
         # model.fit(data[coords_columns])
-
         model = COF()
         model.fit(data[coords_columns])
         # -1 indicates noise in the DBSCAN algorithm
