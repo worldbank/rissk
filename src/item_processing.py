@@ -5,8 +5,10 @@ from scipy.spatial import cKDTree
 from sklearn.cluster import DBSCAN
 from pyod.models.ecod import ECOD
 from pyod.models.cof import COF
+from pyod.models.inne import INNE
 from scipy import stats
 from sklearn.preprocessing import StandardScaler
+from pythresh.thresholds.filter import FILTER
 
 
 class ItemFeatureProcessing(FeatureProcessing):
@@ -14,8 +16,28 @@ class ItemFeatureProcessing(FeatureProcessing):
     def __init__(self, config):
         super().__init__(config)
 
+    def get_contamination_parameter(self, feature_name, method='medfilt', random_state=42):
+        f_name = feature_name.replace('f__', '')
+        contamination = self.config.features.get(f_name, {}).get('parameters', {}).get('contamination')
+        if contamination is None or contamination=='auto':
+            return FILTER(method=method, random_state=random_state)
+        else:
+            return contamination
+
+    @staticmethod
+    def filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3):
+        # Select only those variables that have at least 'min_unique_values' distinct values and more than one
+        # 'frequency' records
+        valid_variables = df.groupby('variable_name').filter(lambda group:
+                                                             len(group[feature_name].unique()) >= min_unique_values
+                                                             and len(group) > frequency)
+        # Get the unique variable names that meet the conditions
+        variables = valid_variables['variable_name'].unique()
+        return variables
+
     @staticmethod
     def filter_columns(data, index_col, threshold=0.2):
+        # !TODO TRHESHOLD SHOLUD PROBABLY BE IN ABSOUTE TERMS AS IT WOULD BE AFFECTED
         drop_columns = []
         keep_columns = []
         total_interviews = data.interview__id.nunique()
@@ -77,7 +99,7 @@ class ItemFeatureProcessing(FeatureProcessing):
         counts = [len(tree.query_ball_point(xyz, r=radius + accuracy)) - 1 for xyz, accuracy in
                   zip(data[['x', 'y', 'z']].values, data['accuracy'])]
 
-        data['s__proximity_counts'] = counts
+        data['s__gps_proximity_counts'] = counts
         coords_columns = ['f__gps_latitude', 'f__gps_longitude']
         # Identify spatial outliers
         # model = DBSCAN(eps=0.3, min_samples=5)  # tune these parameters for your data
@@ -86,134 +108,217 @@ class ItemFeatureProcessing(FeatureProcessing):
         model = COF()
         model.fit(data[coords_columns])
         # -1 indicates noise in the DBSCAN algorithm
-        data['s__spatial_outlier'] = model.predict(data[coords_columns])#model.labels_
-        #data['s__spatial_outlier'] = data['s__spatial_outlier'].replace({1: 0, -1: 1})
+        data['s__gps_spatial_outlier'] = model.predict(data[coords_columns])  # model.labels_
+        # data['s__spatial_outlier'] = data['s__spatial_outlier'].replace({1: 0, -1: 1})
 
         return data.drop(columns=['x', 'y', 'z', 'accuracy'])
 
     def make_score__sequence_jump(self):
         feature_name = 'f__sequence_jump'
-        data, index_col = self.get_clean_pivot_table(feature_name, remove_low_freq_col=True)
-        data = find_anomalies(data, index_col=index_col)
-        return data
+        score_name = self.rename_feature(feature_name)
+        df = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
+        # Select only those variables that have at least three distinct values and more than one hundred records
+        valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
+        for var in valid_variables:
+            mask = (df['variable_name'] == var)
+            model = INNE()
+            model.fit(df[mask][[feature_name]])
+            df.loc[mask, score_name] = model.predict(df[mask][[feature_name]])
+        return df
 
     def make_score__first_decimal(self):
-        feature = 'f__first_decimal'
-        pivot_table, index_col = self.get_clean_pivot_table(feature, remove_low_freq_col=True)
-        isolation_forest_model = IsolationForest(contamination=0.01)  # Adjust contamination parameter as needed
-        for col in pivot_table.drop(columns=['interview__id', 'roster_level', 'responsible']).columns:
-            pivot_table[col + feature.replace('f__', '__')] = None
-            data = pivot_table[~pd.isnull(pivot_table[col])].copy()
-            isolation_forest_model.fit(data[[col]])
-            prediction = isolation_forest_model.predict(data[[col]])
-            pivot_table.loc[~pd.isnull(pivot_table[col]), col + feature.replace('f__', '__')] = prediction
-            pivot_table[col + feature.replace('f__', '__')] = pivot_table[col + feature.replace('f__', '__')].replace(
-                {1: 0, -1: 1})
-        return pivot_table
+
+        feature_name = 'f__first_decimal'
+        score_name = self.rename_feature(feature_name)
+        df = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
+        # Select only those variables that have at least three distinct values and more than one hundred records
+        valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
+        for var in valid_variables:
+            mask = (df['variable_name'] == var)
+            contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
+            model = COF(contamination=contamination)
+            model.fit(df[mask][[feature_name]])
+            df.loc[mask, score_name] = model.predict(df[mask][[feature_name]])
+        return df
 
     def make_score__answer_time_set(self):
         # Detect time set anomalies using ECOD algorithm.
         # ECOD is a parameter-free, highly interpretable outlier detection algorithm based on empirical CDF functions
         feature_name = 'f__answer_time_set'
-        score_name = feature_name.replace('f__', 's__')
-        data = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
-        contamination = self.config.features.answer_time_set.parameters.contamination
+        score_name = self.rename_feature(feature_name)
+        df = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
+
+        # Sorting the DataFrame based on the 'frequency' answer_time_set in descending order
+        sorted_hours = df[feature_name].value_counts().index
+        hour_to_rank = {hour: rank for rank, hour in enumerate(sorted_hours)}
+        # Create a frequecy column
+        df['frequency'] = df[feature_name].map(hour_to_rank)
+
+        # IDENTIFY Outliers by ECOD anomaly detection model
+        contamination = self.get_contamination_parameter(feature_name)
         model = ECOD(contamination=contamination)
-        data[score_name] = model.fit_predict(data[[feature_name]])
-        return data
+        model.fit(df[[feature_name]])
+        df[score_name] = model.predict(df[[feature_name]])
+
+        # In case has detected "high frequencies anomalies", set them to 0
+        df.loc[df['frequency'] <= df[df[score_name] == 0]['frequency'].min(), score_name] = 0
+        df.drop(columns=['frequency'], inplace=True)
+        return df
 
     def make_score__answer_changed(self):
         feature_name = 'f__answer_changed'
-        score_name = feature_name.replace('f__', 's__')
-        data = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
-        contamination = self.config.features.answer_changed.parameters.contamination
-        model = ECOD(contamination=contamination)
-        data[score_name] = model.fit_predict(data[['qnr_seq', feature_name]])
-        return data
+        score_name = self.rename_feature(feature_name)
+        df = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
+
+        # Select only those variables that have at least three distinct values and more than one hundred records
+        valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
+
+        contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
+        for var in valid_variables:
+            mask = (df['variable_name'] == var)
+
+            model = ECOD(contamination=contamination)
+            model.fit(df[mask][[feature_name]])
+            df.loc[mask, score_name] = model.predict(df[mask][[feature_name]])
+        return df
 
     def make_score__answer_removed(self):
         feature_name = 'f__answer_removed'
-        score_name = feature_name.replace('f__', 's__')
-        data = self.get_feature_item__answer_removed(feature_name)
-        contamination = self.config.features.answer_removed.parameters.contamination
-        model = ECOD(contamination=contamination)
-        data[score_name] = model.fit_predict(data[['qnr_seq', feature_name]])
-        return data
+        score_name = self.rename_feature(feature_name)
+        df = self.get_feature_item__answer_removed(feature_name)
+
+        # Select only those variables that have at least three distinct values and more than one hundred records
+        valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
+
+        contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
+        for var in valid_variables:
+            mask = (df['variable_name'] == var)
+
+            model = ECOD(contamination=contamination)
+            model.fit(df[mask][[feature_name]])
+            df.loc[mask, score_name] = model.predict(df[mask][[feature_name]])
+        return df
 
     def make_score__answer_position(self):
         # answer_position is calculated at responsible level
-        feature = 'f__answer_position'
-        pivot_table, index_col = self.get_clean_pivot_table(feature, remove_low_freq_col=True)
-        for col in pivot_table.drop(columns=['interview__id', 'roster_level', 'responsible']).columns:
-            data = pivot_table[~pd.isnull(pivot_table[col])].copy()
+        feature_name = 'f__answer_position'
+        score_name = self.rename_feature(feature_name)
 
-            unique_values = data[col].nunique()
-            # Compute the entropy normalized by the number of possible values of the given distribution
-            entropy_ = data.groupby('responsible')[col].apply(calculate_entropy) / np.log2(unique_values)
-            pivot_table[col + feature.replace('f__', '__')] = pivot_table['responsible'].map(
-                entropy_)
-        return pivot_table
+        df = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
+        # Select only those variables that have at least three distinct values and more than one hundred records
+        valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
+
+        for var in valid_variables:
+            mask = (df['variable_name'] == var)
+            unique_values = df[mask][feature_name].nunique()
+            entropy_df = df[mask].groupby('responsible')[feature_name].apply(calculate_entropy,
+                                                                             unique_values=unique_values,
+                                                                             min_record_sample=10)
+            entropy_df = entropy_df.reset_index()
+            entropy_df = entropy_df[~pd.isnull(entropy_df[feature_name])]
+
+            if entropy_df.shape[0] > 0:
+                entropy_df.sort_values(feature_name, inplace=True, ascending=False)
+
+                median_value = entropy_df[feature_name].median()
+
+                median_value = entropy_df[feature_name].median()
+                entropy_df[score_name] = entropy_df[feature_name].apply(
+                    lambda x: 1 if x < median_value - 50 / 100 * median_value else 0)
+                df.loc[mask, score_name] = df[mask]['responsible'].map(entropy_df.set_index('responsible')[score_name])
+        return df
 
     def make_score__answer_selected(self):
         feature_name = 'f__answer_selected'
-        pivot_table, index_col = self.get_clean_pivot_table(feature_name, remove_low_freq_col=True)
-        for col in pivot_table.drop(columns=['interview__id', 'roster_level', 'responsible']).columns:
-            data = pivot_table[~pd.isnull(pivot_table[col])].copy()
-            pivot_table[col + feature_name.replace('f__', '__')] = False
-            lower_outlier, upper_outlier = get_outlier_iqr(data, col)
-            mask_lower = (~pd.isnull(pivot_table[col])) & (lower_outlier)
-            mask_upper = (~pd.isnull(pivot_table[col])) & (upper_outlier)
-            pivot_table.loc[mask_lower, col + feature_name.replace('f__', '__') + '_lower'] = True
-            pivot_table.loc[mask_upper, col + feature_name.replace('f__', '__') + '_upper'] = True
-        return pivot_table
+        score_name = self.rename_feature(feature_name)
+        df = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
+        # Select only those variables that have at least three distinct values and more than one hundred records
+        valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
+        for var in valid_variables:
+            mask = (df['variable_name'] == var)
+            contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
+            model = ECOD(contamination=contamination)
+            model.fit(df[mask][[feature_name]])
+            score_name1 = score_name + '_lower'
+            score_name2 = score_name + '_upper'
+
+            df.loc[mask, score_name] = model.predict(df[mask][[feature_name]])
+
+            min_good_value = df[(df[score_name] == 0) & mask][feature_name].min()
+            max_good_value = df[(df[score_name] == 0) & mask][feature_name].max()
+
+            df.loc[mask, score_name1] = 0
+            df.loc[mask, score_name2] = 0
+
+            df.loc[mask & (df[mask][feature_name] < min_good_value), score_name1] = 1
+            df.loc[mask & (df[mask][feature_name] > max_good_value), score_name2] = 1
+            df.drop(columns=[score_name], inplace=True)
+        return df
 
     def make_score__answer_duration(self):
-
         feature_name = 'f__answer_duration'
-        data, index_col = self.get_clean_pivot_table(feature_name, remove_low_freq_col=True)
-        scaler = StandardScaler()
-        columns = data.drop(columns=['interview__id', 'roster_level', 'responsible']).columns
-        outliers_columns = ([col + feature_name.replace('f__', '__') + '_lower' for col in columns] +
-                            [col + feature_name.replace('f__', '__') + '_upper' for col in columns])
-        data = pd.concat([data, pd.DataFrame({col: None for col in outliers_columns}, index=data.index)], axis=1)
+        score_name = self.rename_feature(feature_name)
+        df = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
+        # Select only those variables that have at least three distinct values and more than one hundred records
+        valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
 
-        # data[outliers_columns] = False
-        for col in columns:
-            X = detect_duration_outliers_by_magnitude(data, col)
+        score_name1 = score_name + '_lower'
+        score_name2 = score_name + '_upper'
+        for var in valid_variables:
+            mask = (df['variable_name'] == var)
+            contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
+            model = ECOD(contamination=contamination)
+            model.fit(df[mask][[feature_name]])
 
-            X[col + '_upper_outliers'] = X['is_outlier'].copy()
-            # # Filter out outliers to compute box cox tranformation
-            X = X[(X['is_outlier'] == False)].copy()
-            if X[col].nunique() > 1:
-                box_cox_transformed_data, _ = stats.boxcox(X[col] + 1)
-                X['box_cox'] = box_cox_transformed_data
-                X['box_cox'] = transformed_data_rescaled = scaler.fit_transform(X[['box_cox']])
-                # Define Threshold score and set lower and upper outliers, according to a threshold
-                threshold = 1.5
-                z_scores = stats.zscore(X['box_cox'].values)
-                indices_lower_outliers = X[(np.abs(z_scores) > threshold) & (X[col] < X[col].median())].index
-                indices_upper_outliers = X[(np.abs(z_scores) > threshold) & (X[col] > X[col].median())].index
-                data.loc[~pd.isnull(data[col]), col + feature_name.replace('f__', '__') + '_lower'] = False
-                data.loc[~pd.isnull(data[col]), col + feature_name.replace('f__', '__') + '_upper'] = False
-                data.loc[indices_lower_outliers, col + feature_name.replace('f__', '__') + '_lower'] = True
-                data.loc[indices_upper_outliers, col + feature_name.replace('f__', '__') + '_upper'] = True
+            df.loc[mask, score_name] = model.predict(df[mask][[feature_name]])
 
-        return data
+            min_good_value = df[(df[score_name] == 0) & mask][feature_name].min()
+            max_good_value = df[(df[score_name] == 0) & mask][feature_name].max()
+
+            df.loc[mask, score_name1] = 0
+            df.loc[mask, score_name2] = 0
+
+            df.loc[mask & (df[mask][feature_name] < min_good_value), score_name1] = 1
+            df.loc[mask & (df[mask][feature_name] > max_good_value), score_name2] = 1
+
+            df.drop(columns=[score_name], inplace=True)
+
+        return df
 
     def make_score__single_question(self):
-        feature = 'f__single_question'
-        filter_condition = (self.df_item['type'] == 'SingleQuestion')
-        pivot_table, index_col = self.get_clean_pivot_table('value', remove_low_freq_col=True,
-                                                            filter_conditions=filter_condition)
+        # Answer single question is calculated at responsible level
 
-        data = pd.DataFrame(pivot_table.responsible.unique(), columns=['responsible'])
-        for col in pivot_table.drop(columns=['interview__id', 'roster_level', 'responsible']).columns:
-            unique_values = pivot_table[col].nunique()
-            entropy_ = pivot_table.groupby('responsible')[col].apply(calculate_entropy) / np.log2(unique_values)
+        feature_name = 'f__single_question'
+        score_name = self.rename_feature(feature_name)
 
-            data[col + feature.replace('f__', '__')] = data['responsible'].map(entropy_)
+        single_question_mask = ((self.df_item['type'] == 'SingleQuestion')
+                                & (self.df_item['n_answers'] > 2)
+                                & (self.df_item['is_filtered_combobox'] == False)
+                                & (pd.isnull(self.df_item['cascade_from_question_id'])))
 
-        return data
+        df = self.df_item[single_question_mask].copy()
+        # Select only those variables that have at least three distinct values and more than one hundred records
+
+        variables = self.filter_variable_name_by_frequency(df, 'value', frequency=100, min_unique_values=3)
+
+        for var in variables:
+            mask = (df['variable_name'] == var)
+            unique_values = df[mask]['value'].nunique()
+            entropy_df = df[mask].groupby('responsible')['value'].apply(calculate_entropy, unique_values=unique_values)
+            entropy_df = entropy_df.reset_index()
+            entropy_df = entropy_df[~pd.isnull(entropy_df['value'])]
+
+            if entropy_df.shape[0] > 0:
+                entropy_df.sort_values('value', inplace=True, ascending=False)
+
+                median_value = entropy_df['value'].median()
+
+                median_value = entropy_df['value'].median()
+                entropy_df[score_name] = entropy_df['value'].apply(
+                    lambda x: 1 if x < median_value - 50 / 100 * median_value else 0)
+                df.loc[mask, score_name] = df[mask]['responsible'].map(entropy_df.set_index('responsible')[score_name])
+
+        return df
 
     def make_score__multi_option_question(self):
         feature = 'f__multi_option_question'
@@ -243,25 +348,42 @@ class ItemFeatureProcessing(FeatureProcessing):
         return pivot_table
 
     def make_score__first_digit(self):
-        # answer_position is calculated at responsible level
-        feature = 'f__first_digit'
-        pivot_table, index_col = self.get_clean_pivot_table('f__numeric_response', remove_low_freq_col=True)
-        columns = []
-        for col in pivot_table.drop(columns=['interview__id', 'roster_level', 'responsible']).columns:
-            data = pivot_table[~pd.isnull(pivot_table[col])].copy()
-            new_col = filter_columns_by_magnitude(data.drop(columns=['interview__id', 'roster_level', 'responsible']),
-                                                  3).columns
-            columns += list(new_col)
-        columns = list(set(columns))
+        feature_name = 'f__numeric_response'
+        score_name = 's__first_digit'
+        df = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
+        # Select only those variables that have at least three distinct values and more than one hundred records
+        valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
 
-        data = pd.DataFrame(pivot_table.responsible.unique(), columns=['responsible'])
-        for col in columns:
-            results_df = apply_benford_tests(pivot_table[['responsible'] + columns], 'responsible', col)
-            results_df[col + feature.replace('f__', '__')] = results_df['p-value'].apply(lambda x: x <= 0.05)
-            data[col + feature.replace('f__', '__')] = results_df['responsible'].map(
-                results_df.set_index('responsible')[col + feature.replace('f__', '__')])
+        # Select only those variables that have at least three different order of magnitude
+        valid_variables = filter_variables_by_magnitude(df, feature_name, valid_variables, min_order_of_magnitude=3)
 
-        return data
+        # Computes the Jensen divergence for each variable_name and responsible on the first digit distribution.
+        # Jensen's divergence returns a value between (0, 1) of how much the first digit distribution
+        # of specific responsible is similar to the first digit distribution of all others.
+        # Higher the value higher is the difference.
+        # The Bendford Jensen divergence is calculated only on those responsible and variable_name
+        # who have at least 50 records.
+        # Once it is calculated, values that diverge from more than 50% from the median value get marked as "anomalus."
+        benford_jensen_df = apply_benford_tests(df, valid_variables, 'responsible', feature_name,
+                                                apply_first_digit=True, minimum_sampe=50)
+
+        variable_list = benford_jensen_df['variable_name'].unique()
+        for var in variable_list:
+
+            bj_mask = (benford_jensen_df['variable_name'] == var) & (~pd.isnull(benford_jensen_df[feature_name]))
+            bj_df = benford_jensen_df[bj_mask].copy()
+            if bj_df.shape[0] > 0:
+                bj_df.sort_values(feature_name, inplace=True, ascending=True)
+
+                median_value = bj_df[feature_name].median()
+                bj_df[score_name] = bj_df[feature_name].apply(
+                    lambda x: 1 if x > median_value + 50 / 100 * median_value else 0)
+
+                df.loc[df['variable_name'] == var, score_name] = df[df['variable_name'] == var]['responsible'].map(
+                    bj_df.set_index('responsible')[score_name])
+
+
+        return df
 
     # def make_score__last_digit(self):
     #     feature = 'f__last_digit'
