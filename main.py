@@ -3,7 +3,7 @@ import os
 from omegaconf import DictConfig, OmegaConf
 from src.unit_proccessing import *
 import hydra
-#from memory_profiler import memory_usage
+from memory_profiler import memory_usage
 
 
 def manage_relative_path(config, abosulute_path):
@@ -28,12 +28,14 @@ def unit_risk_score(config: DictConfig) -> None:
     config = manage_relative_path(config, hydra.utils.get_original_cwd())
     config = manage_survey_definition(config)
     features_class = UnitDataProcessing(config)
+    df_item = features_class.df_item
     df_unit = features_class.df_unit
     features_class.make_global_score()
     features_class.save()
 
 
 if __name__ == "__main__":
-    unit_risk_score()
-    # mem_usage = memory_usage(unit_risk_score)
-    # print(f"Memory usage (in MB): {max(mem_usage)}")
+    #unit_risk_score()
+    mem_usage = memory_usage(unit_risk_score)
+    print(f"Memory usage (in MB): {max(mem_usage)}")
+

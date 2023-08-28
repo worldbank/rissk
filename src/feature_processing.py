@@ -26,14 +26,23 @@ class FeatureProcessing(ImportManager):
                 (self._df_item['value'] != -999999999)
         )
 
+    @staticmethod
+    def rename_feature(feature_name, starting_string='f', new_string='s'):
+        starting_string = starting_string + '__'
+        new_string = new_string + '__'
+        new_variable_name = feature_name.replace(starting_string, new_string) \
+            if feature_name.startswith(starting_string) else feature_name
+        return new_variable_name
+
     @property
     def df_item(self):
         for method_name in self.get_make_methods(method_type='feature', level='item'):
             feature_name = method_name.replace('make_feature_item', 'f')
             if feature_name in self._allowed_features and feature_name not in self._df_item.columns:
                 try:
-                    print(f"Processing {feature_name} ...")
+                    print(f"Processing {feature_name}...")
                     getattr(self, method_name)(feature_name)
+                    # print(f"{feature_name} Processed")
                 except Exception as e:
                     print("ERROR ON FEATURE ITEM: {}, It won't be used in further calculation".format(feature_name))
         return self._df_item
@@ -93,7 +102,8 @@ class FeatureProcessing(ImportManager):
 
         # define internal variable for level columns
         def merge_columns(row, select_columns):
-            return '_'.join([str(row[col]) for col in select_columns if pd.isnull(row[col]) is False and row[col] != ''])
+            return '_'.join(
+                [str(row[col]) for col in select_columns if pd.isnull(row[col]) is False and row[col] != ''])
 
         df['index_col'] = df[columns].apply(merge_columns, args=(columns,), axis=1)
         return df
@@ -102,14 +112,14 @@ class FeatureProcessing(ImportManager):
 
         microdata = self.make_index_col(microdata)
         df_item = microdata[['value', 'type', 'is_integer', 'qnr_seq',
-                                      'n_answers', 'answer_sequence',
-                                      'cascade_from_question_id', 'is_filtered_combobox',
-                                      'index_col'] + self.item_level_columns].copy()
+                             'n_answers', 'answer_sequence',
+                             'cascade_from_question_id', 'is_filtered_combobox',
+                             'index_col'] + self.item_level_columns].copy()
 
-        paradata_columns = ['responsible', 'f__answer_time_set', 'interviewing']
+        paradata_columns = ['responsible', 'f__answer_time_set', 'interviewing', 'tz_offset']
         # merge microdata with active pardata and keep only the last answer set
-        answer_set_mask = (self.df_active_paradata['event'] =='AnswerSet')
-        data = self.df_active_paradata[answer_set_mask ].drop_duplicates(subset='index_col', keep='last')
+        answer_set_mask = (self.df_active_paradata['event'] == 'AnswerSet')
+        data = self.df_active_paradata[answer_set_mask].drop_duplicates(subset='index_col', keep='last')
         df_item = df_item.merge(data[paradata_columns + ['index_col']], how='left',
                                 on='index_col')
         # Remove items that arew not in interviewing
@@ -136,15 +146,15 @@ class FeatureProcessing(ImportManager):
 
     def add_item_time_features(self, df_item):
         # Define the list of features depending on time
-        time_features = ['f__answer_duration', 'f__comment_duration', 'f__time_changed', 'f__days_from_start']
+        time_features = ['f__answer_duration', 'f__comment_duration']
         if any(col in self._allowed_features for col in time_features):
             df_time = self.get_df_time()
-
+            # Remove records that have variable_name as empty string, i.e. Pauses
+            df_time = df_time[df_time['variable_name'] != '']
             # summarize on item level
             df_time = df_time.groupby(self.item_level_columns + ['index_col']).agg(
                 f__answer_duration=('f__answer_duration', 'sum'),
                 f__comment_duration=('f__comment_duration', 'sum'),
-                f__time_changed=('f__time_changed', 'sum')
             ).reset_index()
 
             # Remove non-selected features
@@ -161,7 +171,7 @@ class FeatureProcessing(ImportManager):
         # sum of all time-intervals from active events ending with the item being CommentSet
         ###### ITEM features
         df_time = self.df_active_paradata.copy()
-        df_time = df_time[df_time['variable_name'] != '']
+
         # calculate time difference in seconds
         df_time['time_difference'] = df_time.groupby('interview__id')['timestamp_local'].diff()
         df_time['time_difference'] = df_time['time_difference'].dt.total_seconds()
@@ -176,13 +186,16 @@ class FeatureProcessing(ImportManager):
         active_events = ['AnswerSet', 'AnswerRemoved', 'CommentSet', 'Resumed', 'Restarted']
 
         df_time['f__total_duration'] = df_time.loc[(df_time['event'].isin(active_events) & (
-                df_time['time_difference'] < 20 * 60)), 'time_difference']
-        df_time['f_pause_duration'] = df_time.loc[df_time['event'].isin(['Resumed', 'Restarted']), 'time_difference']
+                df_time['time_difference'] < 30 * 60)), 'time_difference']
+
         # Get the min date from the min question sequesce as there might be some time setting
         # change later that would change the starting date if just looking at the min of timestamp_local
-        min_date = df_time[df_time['question_sequence'] == df_time['question_sequence'].min()]['timestamp_local'].min()
-        #max_date = df_time[df_time['question_sequence'] == df_time['question_sequence'].max()]['timestamp_local'].max()
-        df_time['f__days_from_start'] = abs((df_time['timestamp_local'] - min_date).dt.days) #/ (max_date-min_date).days
+        min_date = \
+        df_time[(df_time['question_sequence'] == df_time[df_time['variable_name'] != '']['question_sequence'].min())][
+            'timestamp_local'].min()
+        # max_date = df_time[df_time['question_sequence'] == df_time['question_sequence'].max()]['timestamp_local'].max()
+        df_time['f__days_from_start'] = abs(
+            (df_time['timestamp_local'] - min_date).dt.days)  # / (max_date-min_date).days
 
         return df_time
 
@@ -215,7 +228,6 @@ class FeatureProcessing(ImportManager):
         paradata['f__answer_time_set'] = (paradata['timestamp_local'].dt.hour + paradata[
             'timestamp_local'].dt.round(
             '30min').dt.minute / 60)
-
 
         # interviewing, True prior to Supervisor/HQ interaction, else False
         events_split = ['RejectedBySupervisor', 'OpenedBySupervisor', 'OpenedByHQ', 'RejectedByHQ']
@@ -274,7 +286,8 @@ class FeatureProcessing(ImportManager):
         # f__first_digit, first digit of the response if numeric question else empty pd.NA
         self._df_item[feature_name] = pd.NA
         self._df_item.loc[self.numeric_question_mask, feature_name] = \
-            pd.to_numeric(self._df_item.loc[self.numeric_question_mask, 'value']).abs().astype(str).str[0].astype('Int64')
+            pd.to_numeric(self._df_item.loc[self.numeric_question_mask, 'value']).abs().astype(str).str[0].astype(
+                'Int64')
 
     def make_feature_item__last_digit(self, feature_name):
         # f__last_digit, modulus of 10 of the response if numeric question else empty pd.NA
@@ -289,7 +302,8 @@ class FeatureProcessing(ImportManager):
         self._df_item.loc[self.numeric_question_mask, feature_name] = pd.to_numeric(
             self._df_item.loc[self.numeric_question_mask, 'value']).astype('int64')
 
-        self._df_item.loc[self.numeric_question_mask, feature_name] = self._df_item.loc[self.numeric_question_mask, feature_name].apply(extract_last_digit)
+        self._df_item.loc[self.numeric_question_mask, feature_name] = self._df_item.loc[
+            self.numeric_question_mask, feature_name].apply(extract_last_digit)
 
     def make_feature_item__first_decimal(self, feature_name):
         # f__first_decimal, first decimal digit if numeric question else empty pd.NA
@@ -307,7 +321,6 @@ class FeatureProcessing(ImportManager):
                                 & (self._df_item['is_filtered_combobox'] == False)
                                 & (pd.isnull(self._df_item['cascade_from_question_id'])))
 
-
         def answer_position(row):
             value = None
             if (row['value'] in row['answer_sequence']) and pd.notnull(row['value']):
@@ -321,11 +334,11 @@ class FeatureProcessing(ImportManager):
         # This method cannot be used to directly insert the feature within df_item as the item
         # might no longer exist in microdata, but only in paradta
         # f__answer_removed, answers removed (by interviewer, or by system as a result of interviewer action).
-        removed_mask = (self.df_paradata['event'] == 'AnswerRemoved')
+        removed_mask = (self.df_paradata['event'] == 'AnswerRemoved') & (self.df_paradata['role'] == 1)
         df_item_removed = self.df_paradata[removed_mask]
 
-        df_item_removed = df_item_removed.groupby(['index_col', 'qnr_seq', 'interview__id']).agg(
-            f__answer_removed =('order', 'count'),
+        df_item_removed = df_item_removed.groupby(['interview__id', 'responsible', 'variable_name', 'qnr_seq', ]).agg(
+            f__answer_removed=('order', 'count'),
         )
         return df_item_removed.reset_index()
 
@@ -451,9 +464,9 @@ class FeatureProcessing(ImportManager):
 
     def make_feature_unit__number_unanswered(self, feature_name):
         answer_unset_mask = (
-                (self._df_item['value'] == -999999999)
-                | (self._df_item['value'] == '##N/A##')
-        ) & (self._df_item['type'] != 'Variable')
+                                    (self._df_item['value'] == -999999999)
+                                    | (self._df_item['value'] == '##N/A##')
+                            ) & (self._df_item['type'] != 'Variable')
         df_answer_set = self._df_item[answer_unset_mask]
         df_answer_set = df_answer_set.groupby('interview__id').agg(
             f__number_unanswered=('value', 'count')
@@ -465,7 +478,7 @@ class FeatureProcessing(ImportManager):
 
     def make_feature_unit__translation_positions(self, feature_name):
 
-        trans_mask =  (self.df_paradata['event'].isin(['AnswerSet', 'TranslationSwitched']))
+        trans_mask = (self.df_paradata['event'].isin(['AnswerSet', 'TranslationSwitched']))
 
         df_trans_temp = self.df_paradata.loc[
             trans_mask, ['interview__id', 'order', 'event', 'param']].copy().reset_index()
@@ -514,31 +527,41 @@ class FeatureProcessing(ImportManager):
 
         df_paused_temp = df_paused_temp.loc[pause_mask]
         df_paused_temp['pause_duration'] = df_paused_temp['timestamp_local'] - df_paused_temp['prev_datetime']
-        df_paused_temp['pause_seconds'] = df_paused_temp['pause_duration'].dt.total_seconds().astype('Int64')
-        df_paused_temp = df_paused_temp.groupby('interview__id').agg({
-            'pause_seconds': ['count', 'sum', lambda x: x.tolist()]
-        })
 
-        df_paused_temp.columns = ['f__pause_count', 'f__pause_duration', 'f__pause_list']
+        df_paused_temp['pause_seconds'] = df_paused_temp['pause_duration'].dt.total_seconds().astype('Int64')
+        df_paused_temp.loc[df_paused_temp['pause_seconds'] < 0, 'pause_seconds'] = pd.NA
+        df_paused_temp = df_paused_temp.groupby('interview__id').agg(
+            f__pause_count=('pause_seconds', 'size'),  # Count all occurrences
+            f__pause_duration=('pause_seconds', 'sum'),  # Sum non-null values
+            f__pause_list=('pause_seconds', lambda x: x.tolist())
+        )
+
+        # #convert Pause duration into minutes
+        # df_paused_temp['f__pause_duration'] = df_paused_temp['f__pause_duration']/60
         df_paused_temp = df_paused_temp.reset_index()
         return df_paused_temp
 
     def add_unit_time_features(self, df_unit):
         # Define the list of features depending on time
-        time_features = ['f__total_duration', 'f__total_elapse']
+        time_features = ['f__total_duration', 'f__total_elapse', 'f__days_from_start', 'f__time_changed']
         if any(col in self._allowed_features for col in time_features):
             df_time = self.get_df_time()
 
             df_dur = df_time.groupby('interview__id').agg(
-                f__total_duration=('f__total_duration', 'sum')
+                f__total_duration=('f__total_duration', 'sum'),
+                f__total_elapse=('timestamp_local', lambda x: (x.max() - x.min()).total_seconds()),
+                f__time_changed=('f__time_changed', 'sum'),
+                f__days_from_start=('f__days_from_start', 'min'),
             )
-            elapse = df_time.groupby('interview__id')['timestamp_local'].agg(lambda x: (x.max() - x.min()).total_seconds())
-            df_dur['f__total_elapse'] = elapse
 
             df_dur = df_dur.reset_index()
             # Remove non-selected features
-            time_features = ['interview__id'] + [f for f in time_features if f  in self._allowed_features]
+            time_features = ['interview__id'] + [f for f in time_features if f in self._allowed_features]
             df_dur = df_dur[time_features]
+
+            # # convert total_duration and total_elapseinto minutes
+            # df_dur['f__total_duration'] = df_dur['f__total_duration'] / 60
+            # df_dur['f__total_elapse'] = df_dur['f__total_elapse'] / 60
             # Merge with df_item
             df_unit = df_unit.merge(df_dur, how='left', on='interview__id')
         return df_unit

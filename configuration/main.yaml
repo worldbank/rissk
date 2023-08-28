@@ -9,14 +9,12 @@ data:
 
 
 surveys: [ifad_tunesia]
-survey_version: [EndlineFINALV106_1]
+survey_version: all
 reload: false
 extract: true
-save_to_disk: alse
+save_to_disk: false
 
 features:
-  f__days_from_start:
-    use: true
   answer_time_set:
     use: true
     parameters:
@@ -33,18 +31,19 @@ features:
     use: true
   answer_selected:
     use: true
+    parameters:
+      contamination: 0.1
   answer_share_selected:
     use: false
   answer_duration:
     use: true
-  comment_length:
-    use: false
-  comment_set:
-    use: false
-  comment_duration:
-    use: false
+    parameters:
+      contamination: 0.1
   first_decimal:
     use: true
+    parameters:
+      contamination: 0.11
+      frequency: 100
   first_digit:
     use: true
   last_digit:
@@ -66,6 +65,8 @@ features:
     use: true
   pause_duration:
     use: true
+    parameters:
+      contamination: 0.11
   pause_list:
     use: false
   number_unanswered:
@@ -75,8 +76,16 @@ features:
   total_duration:
     use: true
   total_elapse:
-    use: true
+    use: false
   single_question:
-    use: true
+    use: false
   multi_option_question:
       use: true
+  days_from_start:
+    use: false
+  comment_length:
+    use: false
+  comment_set:
+    use: false
+  comment_duration:
+    use: false
