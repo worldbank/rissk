@@ -6,6 +6,26 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, No
 from sklearn.decomposition import PCA
 
 
+def windsorize_95_percentile(df):
+    """
+    Windsorize values in all columns of the DataFrame that are above the 95th percentile.
+
+    Args:
+    - df (pd.DataFrame): Input DataFrame
+
+    Returns:
+    - pd.DataFrame: Windsorized DataFrame
+    """
+    for column in df.columns:
+        # Calculate the 95th percentile for the column
+        percentile_95 = df[column].quantile(0.95)
+
+        # Set values above the 95th percentile to the value at the 95th percentile
+        df[column] = df[column].apply(lambda x: min(x, percentile_95))
+
+    return df
+
+
 class UnitDataProcessing(ItemFeatureProcessing):
 
     def __init__(self, config):
@@ -33,7 +53,8 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
     def make_global_score(self):
         scaler = StandardScaler()
-        df = self.df_unit_score[self._score_columns]  # .astype(float).apply(adjustable_winsorize)
+        df = self.df_unit_score[self._score_columns]
+        df = windsorize_95_percentile(df)# .astype(float).apply(adjustable_winsorize)
         df = pd.DataFrame(scaler.fit_transform(df), columns=self._score_columns)
         pca = PCA(n_components=0.99, whiten=True)
 
