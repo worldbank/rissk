@@ -102,17 +102,34 @@ The algorithms used in the calculation of some of the scores require a contamina
     parameters:
       contamination: 0.1
 ```
-Refer to [FEATURES_SCORES.md](FEATURES_SCORES.md) to check it the `contamination` parameter can be set for a feature.
+Refer to [FEATURES_SCORES.md](FEATURES_SCORES.md) to learn for which features the `contamination` parameter can be set.
 
 # Interpretation
 
-Lorem ipsum...
+MLSS produces `FILE` in folder `FOLDER` containing the URS for each interview. 
 
-1. MLSS produces `FILE` in folder `FOLDER` containing the URS for each interview. 
+Variable `unit_risk_score` contains the URS. It ranges from value 0 for interview(s) with the lowest risk to value 100 for interview(s) with the highest risk. The higher the risk score, the more anomalies have been detected for a given interview in the following dimensions:
+
+- hours of the day during which the interview was conducted
+- duration of the interview and of individual questions
+- locations (if any GPS questions are set) 
+- question sequence followed in the interview
+- how answers were changed or removed
+- duration of pauses in the interview
+- the position and share of answers selected
+- the variance and entropy of answers
+- the distribution of digits of answers
+- number of questions answered and unanswered 
+
+Refer to [FEATURS_SCORES.md](FEATURES_SCORES.md) for a detailed description of all features and scores. In our testing, higher number of anomalies have been indicative of problematic interviewer behaviour, such as data fabrication.
+
+RISSK checks for
+
+> [!WARNING]
+> The URS is **NOT** proof of interviewer wrongdoing. It may include **false positives** (legitimate interviews with high URS), e.g., if unusual circumstances drive the score of a valid interview. It may also include **false negatives** (problematic interviews with low URS) if algorithms do not detect anomalies in some of the problematic interviews. Further investigation or evidence is needed, see in chapter [Survey integration](#survey-integration).
 
 
-2. The URS ranges from 0 (low risk) to 100 (high risk). High-at-risk, means either interviews were not conducted as designed or (partially) fabricated. 
-
+<!--equal distance between scores ?-->
 
 3. The URS of an interview may not be improved by rejecting an interview and modifying it. Note, that if the URS changed for an interview between different executions of the package, it is due to other interviews becoming available/excluded for the scoring. 
 
@@ -124,22 +141,23 @@ RISSK identifies anomalies in the following types of interviewer behaviour and i
 - **Answers**, how do the recorded answers compare to answers in other, e.g. the position or share of answers selected, the variance and entropy of answers, the distribution of digits, etc.
 - **Interview properties**, such as how many answers were set, how many are unanswered, etc.  
 
-[!NOTE]  
-> Refer to [FEATURS_SCORES.md](FEATURES_SCORES.md) for a detailed description of all features and scores. 
+
 
 Does not capture all fakes or files with issues. 
 
 Can be used to guide back checks. 
 
-It only takes the active interviewing time into account, which is defined as xxx. Interviews that were looked at or opened by the supervisor early, e.g. in partial sync, will look strange.
-We only consider questions, as they are actively set by interviewers. 
-The score does not consider outstanding error messages. These are easily usable for survey solution users and should be systematically reviewed. 
+- from individual surveys cannot be compared. 
+- For our test data, unit_risk_scare was a positively scewed distribution, as is common in fraud detection. 
+- 
+- It only takes the active interviewing time into account, which is defined as xxx. Interviews that were looked at or opened by the supervisor early, e.g. in partial sync, will look strange.
+- We only consider questions, as they are actively set by interviewers. 
+- The score does not consider outstanding error messages. These are easily usable for survey solution users and should be systematically reviewed. 
 Precautions, do not say if >0.5 is fake, researcher who wants to get into one guide, if u are user want to use it, 
-When rerunning with more interviews, the scores for previously scored units WILL change. This is due to more information becoming available. For example, a pattern that was initially isolated and suspicious, may have become more common and less suspicious. 
-Please note that scores of individual interview_files can change over time as other interviews are submitted.  
-Do not give feedback like “Your score is low, you did something wrong”
-The score is not proof of wrongdoing, you need to generate evidence otherwise. Some unusual, but legitimate circumstances in one interview may drive the score. It is also not 
-Repeated lower scores for one interviewer over time signal issues with this individual interviewer. If fraudulent behaviour cannot be proven, maybe observe the interviewer for an interview to see what they did wrong. COmpare the score of observed to other unobserved 
+- When rerunning with more interviews, the scores for previously scored units WILL change. This is due to more information becoming available. For example, a pattern that was initially isolated and suspicious, may have become more common and less suspicious. 
+- Please note that scores of individual interview_files can change over time as other interviews are submitted.  
+- Do not give feedback like “Your score is low, you did something wrong”
+- Repeated lower scores for one interviewer over time signal issues with this individual interviewer. If fraudulent behaviour cannot be proven, maybe observe the interviewer for an interview to see what they did wrong. Compare the score of observed to other unobserved 
 
 # Process description
 
