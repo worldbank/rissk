@@ -7,7 +7,7 @@ data:
   final: ../data/final
   results: ../results
 
-
+survey_path: null
 surveys: [ifad_tunesia]
 survey_version: all
 reload: false
@@ -70,7 +70,7 @@ features:
   pause_list:
     use: false
   number_unanswered:
-    use: true
+    use: false
   number_answered:
     use: true
   total_duration:
@@ -80,7 +80,7 @@ features:
   single_question:
     use: false
   multi_option_question:
-      use: true
+      use: false
   days_from_start:
     use: false
   comment_length:
