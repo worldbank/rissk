@@ -119,6 +119,7 @@ class ItemFeatureProcessing(FeatureProcessing):
         df = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
         # Select only those variables that have at least three distinct values and more than one hundred records
         valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
+        df[score_name] = 0
         for var in valid_variables:
             mask = (df['variable_name'] == var)
             model = INNE()
@@ -133,6 +134,7 @@ class ItemFeatureProcessing(FeatureProcessing):
         df = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
         # Select only those variables that have at least three distinct values and more than one hundred records
         valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
+        df[score_name] = 0
         for var in valid_variables:
             mask = (df['variable_name'] == var)
             contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
@@ -172,7 +174,7 @@ class ItemFeatureProcessing(FeatureProcessing):
 
         # Select only those variables that have at least three distinct values and more than one hundred records
         valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
-
+        df[score_name] = 0
         contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
         for var in valid_variables:
             mask = (df['variable_name'] == var)
@@ -189,7 +191,7 @@ class ItemFeatureProcessing(FeatureProcessing):
 
         # Select only those variables that have at least three distinct values and more than one hundred records
         valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
-
+        df[score_name] = 0
         contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
         for var in valid_variables:
             mask = (df['variable_name'] == var)
@@ -207,7 +209,7 @@ class ItemFeatureProcessing(FeatureProcessing):
         df = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
         # Select only those variables that have at least three distinct values and more than one hundred records
         valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
-
+        df[score_name] = 0
         for var in valid_variables:
             mask = (df['variable_name'] == var)
             unique_values = df[mask][feature_name].nunique()
@@ -234,6 +236,7 @@ class ItemFeatureProcessing(FeatureProcessing):
         df = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
         # Select only those variables that have at least three distinct values and more than one hundred records
         valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
+        df[score_name] = 0
         for var in valid_variables:
             mask = (df['variable_name'] == var)
             contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
@@ -264,6 +267,9 @@ class ItemFeatureProcessing(FeatureProcessing):
 
         score_name1 = score_name + '_lower'
         score_name2 = score_name + '_upper'
+
+        df[score_name1] = 0
+        df[score_name2] = 0
         for var in valid_variables:
             mask = (df['variable_name'] == var)
             contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
@@ -300,7 +306,7 @@ class ItemFeatureProcessing(FeatureProcessing):
         # Select only those variables that have at least three distinct values and more than one hundred records
 
         variables = self.filter_variable_name_by_frequency(df, 'value', frequency=100, min_unique_values=3)
-
+        df[score_name] = 0
         for var in variables:
             mask = (df['variable_name'] == var)
             unique_values = df[mask]['value'].nunique()
@@ -367,6 +373,7 @@ class ItemFeatureProcessing(FeatureProcessing):
         benford_jensen_df = apply_benford_tests(df, valid_variables, 'responsible', feature_name,
                                                 apply_first_digit=True, minimum_sampe=50)
 
+        df[score_name] = 0
         variable_list = benford_jensen_df['variable_name'].unique()
         for var in variable_list:
 

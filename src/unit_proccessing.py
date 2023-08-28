@@ -2,7 +2,7 @@ from src.item_processing import *
 from src.utils.stats_utils import *
 from src.detection_algorithms import *
 from scipy import stats
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, Normalizer, PowerTransformer
 from sklearn.decomposition import PCA
 
 
@@ -42,7 +42,7 @@ class UnitDataProcessing(ItemFeatureProcessing):
         scaler = MinMaxScaler(feature_range=(0, 100))
         self._df_unit['unit_risk_score'] = (df_pca * pca.explained_variance_ratio_).sum(axis=1)
 
-        self._df_unit['unit_risk_score'] = 100 - scaler.fit_transform(self._df_unit[['unit_risk_score']])
+        self._df_unit['unit_risk_score'] = scaler.fit_transform(self._df_unit[['unit_risk_score']])
 
     def save(self):
         # TODO reduce decimal points to first digit
@@ -65,8 +65,8 @@ class UnitDataProcessing(ItemFeatureProcessing):
         data = self.make_score__single_question()
         data = data.groupby(['responsible', 'variable_name']).agg({score_name: 'mean'})
         data = data.reset_index()
-        data = data.groupby('responsible')[score_name].mean()
-        self._df_unit[score_name] = self._df_unit['responsible'].map(data)
+        data = data.groupby('responsible').agg({score_name: 'mean'})
+        self._df_unit[score_name] = self._df_unit['responsible'].map(data[score_name])
         # Fill with 0's for missing values
         self._df_unit[score_name].fillna(0, inplace=True)
 
@@ -83,14 +83,14 @@ class UnitDataProcessing(ItemFeatureProcessing):
         data = self.make_score__answer_time_set()
         score_name = self.rename_feature(feature_name)
         # Get the ratio of anomalies per interview__id over the total number of answer set
-        data = data.groupby(['interview__id'])[score_name].sum() / data.groupby(['interview__id'])[score_name].count()
-        self._df_unit[score_name] = self._df_unit['interview__id'].map(data)
+        data = data.groupby(['interview__id']).agg({score_name: 'mean'})
+        self._df_unit[score_name] = self._df_unit['interview__id'].map(data[score_name])
 
     def make_score_unit__answer_removed(self, feature_name):
         data = self.make_score__answer_removed()
         score_name = self.rename_feature(feature_name)
-        data = data.groupby(['interview__id'])[score_name].sum() / data.groupby(['interview__id'])[score_name].count()
-        self._df_unit[score_name] = self._df_unit['interview__id'].map(data)
+        data = data.groupby(['interview__id']).agg({score_name: 'mean'})
+        self._df_unit[score_name] = self._df_unit['interview__id'].map(data[score_name])
         # Fill with 0's for missing values
         self._df_unit[score_name].fillna(0, inplace=True)
 
@@ -98,8 +98,8 @@ class UnitDataProcessing(ItemFeatureProcessing):
         data = self.make_score__answer_changed()
         score_name = self.rename_feature(feature_name)
         # take the max number of anomaly for each question, i.e. 'roster_level' + 'variable_name'
-        data = data.groupby(['interview__id'])[score_name].sum() / data.groupby(['interview__id'])[score_name].count()
-        self._df_unit[score_name] = self._df_unit['interview__id'].map(data)
+        data = data.groupby(['interview__id']).agg({score_name: 'mean'})
+        self._df_unit[score_name] = self._df_unit['interview__id'].map(data[score_name])
         # Fill with 0's for missing values
         self._df_unit[score_name].fillna(0, inplace=True)
 
@@ -177,7 +177,7 @@ class UnitDataProcessing(ItemFeatureProcessing):
     def make_score_unit__total_duration(self, feature_name):
         score_name = self.rename_feature(feature_name)
         # transform Total duration into 10 minutes values
-        self._df_unit[feature_name] = round(self._df_unit[feature_name] / (3600 / 6))
+        self._df_unit[feature_name] = round(self._df_unit[feature_name] / (3600 / 6)) /self._df_unit['f__number_answered']
         contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
 
         model = ECOD(contamination=contamination)
@@ -255,8 +255,8 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
     def make_score_unit__number_answered(self, feature_name):
         score_name = self.rename_feature(feature_name)
-        self._df_unit[score_name] = (self._df_unit[feature_name] - self._df_unit[feature_name].mean()) / self._df_unit[
-            feature_name].std()
+        # self._df_unit[score_name] = (self._df_unit[feature_name] - self._df_unit[feature_name].mean()) / self._df_unit[
+        #     feature_name].std()
 
     def make_score_unit__number_unanswered(self, feature_name):
         score_name = self.rename_feature(feature_name)
@@ -270,7 +270,7 @@ class UnitDataProcessing(ItemFeatureProcessing):
         data = data.reset_index()
 
         self._df_unit['s__gps_proximity_counts'] = self._df_unit['interview__id'].map(
-            data.set_index('interview__id')['s__gps_spatial_outlier']
+            data.set_index('interview__id')['s__gps_proximity_counts']
         )
 
         self._df_unit['s__gps_spatial_outlier'] = self._df_unit['interview__id'].map(
@@ -283,6 +283,9 @@ class UnitDataProcessing(ItemFeatureProcessing):
         self._df_unit[score_name] = self._df_unit['interview__id'].map(
             data.set_index('interview__id')[feature_name]
         )
+
+        self._df_unit['s__gps_proximity_counts'].fillna(0, inplace=True)
+        self._df_unit['s__gps_spatial_outlier'].fillna(0, inplace=True)
 
     # def make_feature_unit__comments(self):
     #     columns_to_check = ['f__comments_set', 'f__comment_length']
