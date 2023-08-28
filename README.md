@@ -1,9 +1,12 @@
+![RISSK Logo](https://github.com/RowSquared/mlss/blob/main/rissk.png?raw=true)
 
-This package creates an **Unit Risk Score (URS)** from **[Survey Solutions](https://mysurvey.solutions/en/)** export files that provides an indication of how much individual interviews are at risk of including undesired interviewer behaviour such as data fabrication. The package extracts a range of features from the microdata and paradata and identifies anomalies. Individual scores are combined into the URS ranging from 0 to 100. The package is generic and can be easily applied to most CAPI or CATI surveys run in Survey Solutions without any modifications. 
+# What is RISSK?
 
-# Getting Started
+RISSK creates an easy-to-interpret **Unit Risk Score (URS)** directly from your **[Survey Solutions](https://mysurvey.solutions/en/)** export files. The score indicates the how much individual interviews are at risk of including undesired interviewer behaviour such as data fabrication. RISSK is generic and can easily be integrated into the monitoring system of most CAPI or CATI surveys run in Survey Solutions. It works by extracting a range of generic features from the microdata and paradata exports, identifying anomalies and combining individual scores into the URS using Principal Component Analysis. 
 
-These instructions will guide you on how to install and run this package on your local machine.
+# Getting started
+
+These instructions will guide you on how to install and run RISSK on your local machine.
 
 ## Prerequisites
     
@@ -57,7 +60,7 @@ cd /Users/USER/projects/mlss
     
    - `<export_path>` with the string of the path to the directory containing your Survey Solutions export data.
    - `<survey_name>` with the string of the Questionnaire variable defined in the Survey Solutions Designer, or the beginning of the name of the exported zip files, e.g., ***<survey_name>**_version_Tabular_All.zip*.
-   - `<result_path>` with the string of the directory where the output files should be stored. The argument `data.results` is option. If not specified, results will be stored in directory `mlss/result`.
+   - `<result_path>` with the string of the directory where the output files should be stored. The argument `data.results` is optional. If not specified, results will be stored in directory `mlss/result`.
 
 
 ```
@@ -69,6 +72,9 @@ python main.py data.externals=<export_path> surveys=<survey_name> data.results=<
 # Advanced Use
 
 This chapter provides additional information for users who would like to dig deeper and adjust or expand the functioning of the package. 
+
+## export score and feature files
+Scores files can be exported
 
 ## Exclude features
 
@@ -86,7 +92,60 @@ features:
     use: false
 ```
 
+## Set contamination level
+
+The algorithms used in the calculation of some of the scores require a contamination level to be set. By default, RISSK uses the `medfilt` thresholding method to automatically determine the contamination level. This can be overwritten by specifying the `contamination` parameter for the specific score in the `environment/main.yaml`. In below example, a contamination level of 0.1 will be used for the ECOD algorithm in `answer_changed`.
+
+```yaml
+  answer_changed:
+    use: true
+    parameters:
+      contamination: 0.1
+```
+Refer to [FEATURES_SCORES.md](FEATURES_SCORES.md) to check it the `contamination` parameter can be set for a feature.
+
+# Interpretation
+
+Lorem ipsum...
+
+1. MLSS produces `FILE` in folder `FOLDER` containing the URS for each interview. 
+
+
+2. The URS ranges from 0 (low risk) to 100 (high risk). High-at-risk, means either interviews were not conducted as designed or (partially) fabricated. 
+
+
+3. The URS of an interview may not be improved by rejecting an interview and modifying it. Note, that if the URS changed for an interview between different executions of the package, it is due to other interviews becoming available/excluded for the scoring. 
+
+RISSK identifies anomalies in the following types of interviewer behaviour and interview properties. Interviews with higher URS are more unusual in those dimensions, interviews with lower URS are more normal. 
+
+- **Timing**, such as the day and hours of the day during which the interview was conducted, the duration of the interview and of individual questions, etc.
+- **Location**, (if any GPS questions are set), are recorded locations spacial outliers and how many other locations are in the extreme vicinity. 
+- **Process**, such as the question sequence followed in the interview, how answers were changed or removed, the patterns of pauses in the interview, etc.
+- **Answers**, how do the recorded answers compare to answers in other, e.g. the position or share of answers selected, the variance and entropy of answers, the distribution of digits, etc.
+- **Interview properties**, such as how many answers were set, how many are unanswered, etc.  
+
+[!NOTE]  
+> Refer to [FEATURS_SCORES.md](FEATURES_SCORES.md) for a detailed description of all features and scores. 
+
+Does not capture all fakes or files with issues. 
+
+Can be used to guide back checks. 
+
+It only takes the active interviewing time into account, which is defined as xxx. Interviews that were looked at or opened by the supervisor early, e.g. in partial sync, will look strange.
+We only consider questions, as they are actively set by interviewers. 
+The score does not consider outstanding error messages. These are easily usable for survey solution users and should be systematically reviewed. 
+Precautions, do not say if >0.5 is fake, researcher who wants to get into one guide, if u are user want to use it, 
+When rerunning with more interviews, the scores for previously scored units WILL change. This is due to more information becoming available. For example, a pattern that was initially isolated and suspicious, may have become more common and less suspicious. 
+Please note that scores of individual interview_files can change over time as other interviews are submitted.  
+Do not give feedback like “Your score is low, you did something wrong”
+The score is not proof of wrongdoing, you need to generate evidence otherwise. Some unusual, but legitimate circumstances in one interview may drive the score. It is also not 
+Repeated lower scores for one interviewer over time signal issues with this individual interviewer. If fraudulent behaviour cannot be proven, maybe observe the interviewer for an interview to see what they did wrong. COmpare the score of observed to other unobserved 
+
 # Process description
+
+How does it work. The 
+
+ The package extracts a range of features from the microdata and paradata and identifies anomalies. Individual scores are combined into the URS ranging from 0 to 100. 
 
 This chapter describes in broad terms the individual steps of the package. 
 
@@ -108,18 +167,123 @@ This chapter describes in broad terms the individual steps of the package.
 4. **Build paradata**: For each version, the paradata file is loaded as dataframe. The column `parameters` is split into `param`, `roster_level` and `answer` and question properties are merged in from `df_questionnaire`. For each interview, only events are kept that precede the first occurrence of of any of the following events, `['RejectedBySupervisor', 'OpenedBySupervisor', 'OpenedByHQ', 'RejectedByHQ']`. This limits the paradata, and all paradata based features to interviewing events, i.e. the interviewing that was done before the first interaction by the supervisor or HQ with the interview file. 
 
 [@Gabriele]: <> (This is done later, correct?)
-6. Append versions. The questionnaire, microdata and paradata dataframes are appended for all versions. 
-7. Build df_interviewing.
-8. Build features. Features are built on the item or unit level. For details on all features, their scope and how they were built, refer to [Features & Scores](features_scores.md).
- 
 
-# Integrate into survey
+5. Append versions. The questionnaire, microdata and paradata dataframes are appended for all versions. 
+7. Build df_interviewing.
+8. Build features. Features are built on the item or unit level. For details on all features, their scope and how they were built, refer to [Features & Scores](FEATURES_SCORES.md). Features are absolute values on the item or unit level. 
+
+9. Individual scores are combined into the `unit_risk_score` using Principal Component Analysis (PCA). To produce an score on  Scores are normalized and windsorized to reduce extreme outliers.
+
+# Survey integration
 
 > [!WARNING]  
-> The MLSS package is aimed to be an additional source of information. It does not make redundant other components of the data quality assurance system, such as  back-checks, audio audits, indicator monitoring, completion and progress checks or high-frequency checks, as these fulfil other important functions.
+> RISSK is aimed to provide additional information. It does not make redundant other components of a data quality assurance system, such as back-checks, audio audits, indicator monitoring, completion & progress tracking or high-frequency checks. These fulfil other important functions.
 
-[!NOTE]  
-> Highlights information that users should take into account, even when skimming.
+If your survey uses multiple questionnaires, such as separate household and community questionnaires, the tool must be run separately for each template. 
+The tool is aimed to provide an additional source of information for and should not make redundant other components of the data quality assurance system, such as  back-checks, audio audits, indicator monitoring, completion and progress checks or high-frequency checks, as these fulfil other important functions.
+The tool should be run frequently to allow timely identification of and solution to issues. For most surveys, somewhere between daily and weekly should be a good frequency. Keep in mind that, depending on your survey, exporting paradata from Survey Solutions and running the tool may take several minutes. 
+Integrating it into the data management and monitoring system is desirable, so all information is available together and executing the script and handling the output is automated. As an example, the tool could be executed as part of the scripts that export from Survey Solutions and its output can be picked up as input in your monitoring dashboard.
+The tool is designed to provide additional information at the time of the first review of an interview file (see time-dependence of score in chapter Interpretation).    
+2 uses: information for review/investigation/backchecks -> look only at interviews that have newly been added since the last batch. One way of achieving this is for every batch of interviews to review the score for those interviews where in file interview__diagnostics, interview__status== “Completed” and rejections__sup==0 and rejections__hq==0, and take actions accordingly. These can include that a back-check interview or audio review is being triggered, or the interviewer being confronted, a 
+
+have not previously been rejected. 
+Second use is to look at the score by interviewer (and potentially team) over time, e.g., by week of field work survey. While scores for individual interviews may not be concerning, aggregating them by interviewer and over time, may show trends that could require action, e.g.,  individual interviewers who perform worse than others on average.
+
+Who interviews to check
+check the interviews with the highest values, be diverse in what you check, different interviewers, different days
+provide feedback, take actions, make sure interviewers know
+
+How to check
+
+What to do if you find discrepancies. 
+don't let interviewers get aways with things. Could be stern warning or dismissal. check other cases by the same interviewer (guided by the score) Reinterview affected households. 
+
+
+
+# Limitations
+
+- MLSS assumes that the majority of interviews are conducted as desired, which determines normal behaviour. The scores may break down for surveys with extreme levels of problematic interviewer behaviour.
+
+- With low number of interviews (e.g., during the first few days of fieldwork) the scores are less effective and reliable. 
+
+- MLSS is not reliable for interviews that were in a significant part filled in after the first supervisor or HQ related events in the paradata, e.g. if an interview file was originally submitted almost empty and later rejected to be completed by the interviewer. By design, MLSS only considers the part of the interview that happened prior to the first interaction of a Supervisor or HQ role with the interview file.
+- 
+- If you use [partial synchronization](https://docs.mysurvey.solutions/headquarters/config/admin-settings/) and would like to use MLSS, Supervisor and HQ roles should not open interview files prior to their completion.  
+
+- MLSS has been tested on laptop with XYZ GB of RAM, for paradata up to x M rows, or a survey of XX questions and YY interviews. To process very large datasets may require a server with higher memory. 
+
+- The tool does not (yet) accept microdata exports from Survey Solutions in the SPSS format. Export to STATA or TAB instead. 
+
+- Interviews containing non-contact or non-response cases may distort the URS, as they often follow a different (much shorter) path in the questionnaire. <!-- @Gabriele, we need to test this -->  
+- For barcode, picture, audio and geography questions, no microdata based features have been developed. These questions are only considered through their related events in the paradata. 
+
+- The tool has been conceptualized for CAPI or CATI interviews. It has not been tested for surveys run in Survey Solution’s CAWI mode.
+
+# Confirmation of results
+
+## Testing
+
+confirmation on tests (in our tests we observed that x moving up, moved up the score by ... )
+
+## Experiment
+
+To verify the feature generation, anomaly detection and scoring system, we required survey data with reliable interview-level quality labels.  We infused a real CATI survey (name and details cannot be given due to a non-disclosure agreement) with artificial high-at-risk interviews, by asking interviewers to produce fake interviews just after the completion of the real survey. 7 different scenarios were given to induce variation. For some scenarios, interviewers were incentivized to give their best. 11 interviewers created 1 interview file for each of the following scenarios in sequence.  
+
+1. Non-incentivized. Pretend you are interviewing and fill in the questionnaire.
+2. Incentivized. Fake as good as you can, try not to get caught.
+Same as Scenario 2.
+3. Incentivized. Fake as good as you can, try to be realistic in timings.
+4. Incentivized. Fake as good as you can, try to set as real answers as possible. 
+5. Non-incentivized. Fake without putting effort.
+6. Incentivized. Fake as fast as possible. 
+
+The 77 artificial fake interviews were combined with the 241 real interviews from the survey. Real interviews for this survey are believed to be of general low-risk, as they were conducted by a small team of interviewers with a trusted, long-term relationship, incentives to perform well and deterrents to do badly, as well as a good data monitoring structure in place. Furthermore, interviewers were aware that the data they collected would be used to validate secondary data and that discrepancies would be investigated. Nevertheless, it could not be ruled out that some real interviews contained problematic interviewer behaviour. 
+
+# Roadmap
+
+The following additions to the methodology, package and dissemination can be explored in the future.
+
+- **Additional robustness checks**. While features, scores and algorithms have been tested, further experiments could be conducted to experiment how alternative feature design, scoring algorithms and levels and clustering affect the overall score.
+
+
+- **Additional features**. Identify new potential features e.g.: 
+
+  - Count of QuestionDeclaredInvalid events in paradata once SurveySolution functionality becomes available.
+  - Allow additional user input to specify broad survey parameters, e.g., specify cluster variable (to identify spacial and temporal anomalies)  or expected survey duration in days or sample size.
+
+
+- **Specific features**. Identify specific (but less common) suspicious events and create features of higher-level information, e.g.:  
+  - Unusual sequence jumps to TimeStamps questions are more suspicious than for other questions
+  - GPS questions recorded at different time than most of the interview.
+  - Removing or changing the answers to gating questions (either linked or trigger enablement) may be indicative of interviewers trying to cut the length if an interview, especially at the beginning of a survey.
+  - Distinguish between different roster types. E.g. for list rosters, roster_level can be ignored, as often very homogeneous. For other roster types, the roster_level may carry more meaning 
+
+
+- **Facilitate ease of use**: Wrapper functions can be written to facilitate easier workflows from other packages used to build survey pipelines, such as R or STATA.
+
+
+- **Obtain testing/training data**. Additional testing data with interview-level quality labels would improve the validity and expose the package to a larger variety of survey settings, e.g. by:
+  - Obtaining data from a survey that used a systematic and thorough review/verification systems (e.g. random audio auditing). 
+  - Integrating MLSS into a survey quality system to obtain the above.
+  - Produce fake data during training or post-survey.
+
+- **Trained models**. With additional training available, one can test alternative approaches of training models to identify at-risk interviews, using as inputs either constructed micro and paradata dataframes, the features or scores.
+
+
+- **Other CAPI tools**. Expand to allow inputs from other CAPI tools.
+
+
+- **Server/API**. Tool to receive quality indication/output (what Gabriele mentioned on last call with WB). Platform to get back reduced feedback to learn.
+
+[@Gabriele]: <> (Details please, what was this idea again?)
+
+- **Dissemination**. Work can be done to raise awareness of the package among potential users and to stimulate the use, such as blog posts, presentations, courses, conference papers or supporting deployment among first users.
+
+
+time series analysis
+time accounting
+instead of single variate outlier detection, multi variate 
+identify different clusters, fabricating interviewers may be different to interviewers who are struggling, need more detailed labels.
 
 > [!IMPORTANT]  
 > Crucial information necessary for users to succeed.
