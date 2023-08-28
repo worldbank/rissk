@@ -78,7 +78,7 @@ features:
   total_elapse:
     use: false
   single_question:
-    use: true
+    use: false
   multi_option_question:
       use: true
   days_from_start:
