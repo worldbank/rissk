@@ -244,13 +244,9 @@ Huge values (low accuracy) is indicative of wrong tablet settings.
 
 **Score**
 
-round to two hour intervals under  1 day, and to days after, control the sensibility of the outlier detection algorithm, looking localy, so also detecting anomalies in the middle
+To control the sensibility of the outlier detection algorithm, pause duration is rounded to 2 hrs intervals for durations less then 24 hrs, and to full days for durations over 24 hrs. Anomalies are detected using [COF](https://github.com/yzhao062/pyod#thresholding-outlier-scores), which checks locally and is able to identify anomalies in the middle of a distribution. For example, pauses of 8, 10 or 12 hour length may be considered anomalous while shorter or longer pauses are not. 
 
-COF https://github.com/yzhao062/pyod#thresholding-outlier-scores
-
-e.g. 8 or 10 might be weird, but 1 day or 6 hrs not. 
-
-boolean value if anomalous unit a 
+`s__pause_duration` is calculated as a boolean that takes the value TRUE if an interview contained a pause of anomalous length, and FALSE otherwise.
 
 
 ## pause_list
@@ -276,14 +272,17 @@ boolean value if anomalous unit a
 
 ## total_duration
 
+Detects anomalies in the interview duration. 
+
 **Feature**
+
+`s__total_duration` is constructed on the unit level and contains an approximation of the total duration of active interviewing events. It is built as follows:
+
+- 
 
 **Score**
 
-round to 10 min, using ECOD 
-
-if contamination is in yaml, it takes the one from the yaml, if not it automatically determines the, use the medfilt methods. 
-
+To control the sensibility of the outlier detection algorithm, `f__total_duration` is rounded to the next 10 minutes interval. Anomalies are detected using the [ECOD](https://arxiv.org/pdf/2201.00382.pdf), a fast, non-parametric and easy-to-interpret algorithm using cumulative distribution functions. The automatically determined contamination level can be [overwritten manually](README.md#Advanced-Use).
 
 ## total_elapsed
 
