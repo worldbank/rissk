@@ -7,15 +7,19 @@ data:
   final: ../data/final
   results: ../results
 
-survey_path: null
-surveys: [ifad_tunesia]
+export_path: /Users/gabriele/App/rowsquared/mlss/data/externals
+
+output_file: unit_risk_score.csv
+
+
+surveys: [EPforR_TAP]
 survey_version: all
 reload: false
 extract: true
 save_to_disk: false
 
 features:
-  answer_time_set:
+  answer_hour_set:
     use: true
     parameters:
       contamination: 0.11
