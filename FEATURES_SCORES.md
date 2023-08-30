@@ -10,21 +10,18 @@ This chapter describes the construction of all features and scores.
 ## f__days_from_start
 [@Gabriele]: <> (inconsitent naming, how does it enter)
 
-## answer_time_set
-[@Gabriele]: <> (
-- Let's rename to answer_hour or event_hour,
-- should we adjust for TZ?- has been adjusted )
+## answer_hour_set
 
 Captures active interviewing events during unusual hours of the day.
 
 
 **Feature**
 
-`f__answer_time_set` is the hour of the day from the paradata timestamp, rounded to half-hour intervals. No timezone adjustments are done. It is constructed on the item level for all active interviewing actions performed by the interviewer in the paradata.
+`f__answer_hour_set` is the hour of the day from the timezone-adjusted paradata timestamp, rounded to half-hour intervals. It is constructed on the item level for all active interviewing actions performed by the interviewer in the paradata.
 
 **Score**
 
-Anomalies in `f__answer_time_set` across all events are detected using the [ECOD](https://arxiv.org/pdf/2201.00382.pdf), a fast, non-parametric and easy-to-interpret algorithm using cumulative distribution functions. The `contamination` parameter is set to 0.11 by default (based on testing data) and can be adjusted in `environment/main.yaml`. Increase it to be stricter, decrease to be more lenient.
+Anomalies in `f__answer_hour_set` across all events are detected using the [ECOD](https://arxiv.org/pdf/2201.00382.pdf), a fast, non-parametric and easy-to-interpret algorithm using cumulative distribution functions. The `contamination` parameter is set to 0.11 by default (based on testing data) and can be adjusted in `environment/main.yaml`. Increase it to be stricter, decrease to be more lenient.
 
 `s__answer_time_set` is the share of anomalies per interview. The value ranges from 0 (whole interview was conducted during usual hours of the day) to 1 (whole interview during unusual hours of the day). Please note that the score is treating all days equal and is not dependent on the date nor the day-of-the-week.   
 
