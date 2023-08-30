@@ -4,6 +4,7 @@ from src.detection_algorithms import *
 from scipy import stats
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, Normalizer, PowerTransformer
 from sklearn.decomposition import PCA
+from pyod.models.lscp import LSCP
 
 
 def windsorize_95_percentile(df):
@@ -231,23 +232,25 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
     def make_score_unit__pause_duration(self, feature_name):
         score_name = self.rename_feature(feature_name)
-        # transform Pause duration into two-hours values for the first day and day value after the first day
 
         duration_mask = ~pd.isnull(self._df_unit[feature_name])
+        df = self._df_unit[duration_mask].copy()
+        k_list = [20, 30, 40, 50, 60]
+        # Number of classifiers being trained
+        contamination = self.get_contamination_parameter(feature_name, method='savgol', random_state=42)
 
-        self._df_unit.loc[duration_mask, feature_name] = round(self._df_unit[duration_mask][feature_name] / (3600 * 2),
-                                                               0)
-        self._df_unit.loc[duration_mask, feature_name] = self._df_unit[duration_mask][feature_name].apply(
-            lambda x: round(x / 12) * 12 if x > 12 else x)
-
+        detector_list = [COF(n_neighbors=k, contamination=contamination) for k in k_list]
         # Find anomalies in the distribution making use of COF anomaly detector.
         # Connectivity-Based Outlier Factor (COF) COF uses the ratio of average chaining distance
         # of data point and the average of average chaining distance of k nearest neighbor
         # of the data point, as the outlier score for observations.
-        contamination = self.get_contamination_parameter(feature_name, method='savgol', random_state=42)
-        model = COF(contamination=contamination)
-        model.fit(self._df_unit[duration_mask][[feature_name]])
-        self._df_unit.loc[duration_mask, score_name] = model.predict(self._df_unit[duration_mask][[feature_name]])
+        model = LSCP(detector_list)
+        scaler = StandardScaler()
+        df = windsorize_95_percentile(df)
+        df = pd.DataFrame(scaler.fit_transform(df), columns=df.columns)
+        model.fit(df[[feature_name]])
+
+        self._df_unit.loc[duration_mask, score_name] = model.predict(df[[feature_name]])
         # Fill with 0's for missing values. It means "No anomalies detected"
         self._df_unit[score_name].fillna(1, inplace=True)
 

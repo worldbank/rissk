@@ -8,7 +8,7 @@ from pyod.models.cof import COF
 from pyod.models.inne import INNE
 from scipy import stats
 from sklearn.preprocessing import StandardScaler
-from pythresh.thresholds.filter import FILTER
+from pyod.models.thresholds import FILTER
 
 
 class ItemFeatureProcessing(FeatureProcessing):
