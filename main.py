@@ -2,9 +2,10 @@ import os
 from omegaconf import DictConfig, OmegaConf
 from src.unit_proccessing import *
 import hydra
-#from memory_profiler import memory_usage
 import warnings
+
 warnings.simplefilter(action='ignore', category=Warning)
+
 
 def manage_relative_path(config, abosulute_path):
     for name, relative_path in config.data.items():
@@ -30,7 +31,7 @@ def manage_export_path(config):
 
 @hydra.main(config_path='configuration', version_base='1.1', config_name='main.yaml')
 def unit_risk_score(config: DictConfig) -> None:
-    #print(OmegaConf.to_yaml(config))
+    # print(OmegaConf.to_yaml(config))
     print("*" * 12)
     config = manage_export_path(config)
     config = manage_relative_path(config, hydra.utils.get_original_cwd())
@@ -44,5 +45,3 @@ def unit_risk_score(config: DictConfig) -> None:
 
 if __name__ == "__main__":
     unit_risk_score()
-    #mem_usage = memory_usage(unit_risk_score)
-    #print(f"Memory usage (in MB): {max(mem_usage)}")
