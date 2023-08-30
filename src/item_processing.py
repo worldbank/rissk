@@ -102,7 +102,7 @@ class ItemFeatureProcessing(FeatureProcessing):
         data['s__gps_proximity_counts'] = counts
         coords_columns = ['f__gps_latitude', 'f__gps_longitude']
         # Identify spatial outliers
-        # model = DBSCAN(eps=0.3, min_samples=15)  # tune these parameters for your data
+        # model = DBSCAN(eps=0.3, min_samples=5)  # tune these parameters for your data
         # model.fit(data[coords_columns])
         model = COF()
         model.fit(data[coords_columns])
@@ -142,14 +142,14 @@ class ItemFeatureProcessing(FeatureProcessing):
             df.loc[mask, score_name] = model.predict(df[mask][[feature_name]])
         return df
 
-    def make_score__answer_time_set(self):
+    def make_score__answer_hour_set(self):
         # Detect time set anomalies using ECOD algorithm.
         # ECOD is a parameter-free, highly interpretable outlier detection algorithm based on empirical CDF functions
-        feature_name = 'f__answer_time_set'
+        feature_name = 'f__answer_hour_set'
         score_name = self.rename_feature(feature_name)
         df = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
 
-        # Sorting the DataFrame based on the 'frequency' answer_time_set in descending order
+        # Sorting the DataFrame based on the 'frequency' answer_hour_set in descending order
         sorted_hours = df[feature_name].value_counts().index
         hour_to_rank = {hour: rank for rank, hour in enumerate(sorted_hours)}
         # Create a frequecy column

@@ -56,7 +56,7 @@ class UnitDataProcessing(ItemFeatureProcessing):
         df = self.df_unit_score[self._score_columns]
         df = windsorize_95_percentile(df)# .astype(float).apply(adjustable_winsorize)
         df = pd.DataFrame(scaler.fit_transform(df), columns=self._score_columns)
-        pca = PCA(n_components=0.99, whiten=True)
+        pca = PCA(n_components=0.99, whiten=True, random_state=42)
 
         # Conduct PCA
         df_pca = pca.fit_transform(df.fillna(0))
@@ -70,7 +70,7 @@ class UnitDataProcessing(ItemFeatureProcessing):
         df = self._df_unit[['interview__id', 'responsible', 'unit_risk_score']].copy()
         df.sort_values('unit_risk_score', inplace=True)
         file_name = "_".join([self.config.surveys[0], self.config.survey_version[0], 'unit_risk_score']) + ".csv"
-        output_path = os.path.join(self.config.data.results, file_name)
+        output_path = self.config.output_file.split('.')[0] + '.csv'
         df.to_csv(output_path, index=False)
         print(f'SUCCESS! you can find the unit_risk_score output file in {self.config.data.results}')
 
@@ -100,8 +100,8 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
         self._df_unit[feature_name.replace('f__', 's__')] = self._df_unit['responsible'].map(entropy_)
 
-    def make_score_unit__answer_time_set(self, feature_name):
-        data = self.make_score__answer_time_set()
+    def make_score_unit__answer_hour_set(self, feature_name):
+        data = self.make_score__answer_hour_set()
         score_name = self.rename_feature(feature_name)
         # Get the ratio of anomalies per interview__id over the total number of answer set
         data = data.groupby(['interview__id']).agg({score_name: 'mean'})
@@ -190,8 +190,10 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
     def make_score_unit__time_changed(self, feature_name):
         score_name = self.rename_feature(feature_name)
-        # Bin the negative time changed into 4 bins
-        bins = [float('-inf'), -12 * 3600, -3 * 3600, -1 * 3600, -0.1, float('inf')]
+        # Bin the negative time changed into 4 bins:
+        # Not time changed, less than one hour, 1-5 hours, 5-24 hours, 24+ hours
+
+        bins = [float('-inf'), -24 * 3600, -5 * 3600, -1 * 3600, -0.1, float('inf')]
         labels = [1, 0.75, 0.5, 0.25, 0]  # Numeric values for each bin
         self._df_unit[score_name] = pd.cut(self._df_unit['f__time_changed'], bins=bins, labels=labels).astype(float)
 

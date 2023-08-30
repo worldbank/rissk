@@ -74,7 +74,7 @@ class FeatureProcessing(ImportManager):
         vars_needed = ['interview__id', 'order', 'event', 'responsible', 'role', 'tz_offset',
                        'param', 'answer', 'roster_level', 'timestamp_local', 'variable_name',
                        'question_sequence', 'question_scope', 'type', 'question_type',
-                       'survey_name', 'survey_version', 'interviewing', 'yes_no_view', 'index_col', 'f__answer_time_set'
+                       'survey_name', 'survey_version', 'interviewing', 'yes_no_view', 'index_col', 'f__answer_hour_set'
                        ]
 
         df_para_active = self.df_paradata.loc[active_mask, vars_needed]
@@ -116,7 +116,7 @@ class FeatureProcessing(ImportManager):
                              'cascade_from_question_id', 'is_filtered_combobox',
                              'index_col'] + self.item_level_columns].copy()
 
-        paradata_columns = ['responsible', 'f__answer_time_set', 'interviewing', 'tz_offset']
+        paradata_columns = ['responsible', 'f__answer_hour_set', 'interviewing', 'tz_offset']
         # merge microdata with active pardata and keep only the last answer set
         answer_set_mask = (self.df_active_paradata['event'] == 'AnswerSet')
         data = self.df_active_paradata[answer_set_mask].drop_duplicates(subset='index_col', keep='last')
@@ -182,18 +182,20 @@ class FeatureProcessing(ImportManager):
             df_time['event'].isin(['AnswerSet', 'AnswerRemoved']), 'time_difference']
         df_time['f__comment_duration'] = df_time.loc[df_time['event'] == 'CommentSet', 'time_difference']
 
+        df_time['f__pause_duration'] = df_time.loc[df_time['event'].isin(['Resumed', 'Restarted']), 'time_difference']
+
         ###### UNIT features
         active_events = ['AnswerSet', 'AnswerRemoved', 'CommentSet', 'Resumed', 'Restarted']
-
+        # Calculate the total duration of active events for all events with less than 30 minutes
         df_time['f__total_duration'] = df_time.loc[(df_time['event'].isin(active_events) & (
                 df_time['time_difference'] < 30 * 60)), 'time_difference']
 
         # Get the min date from the min question sequesce as there might be some time setting
         # change later that would change the starting date if just looking at the min of timestamp_local
-        min_date = \
-        df_time[(df_time['question_sequence'] == df_time[df_time['variable_name'] != '']['question_sequence'].min())][
-            'timestamp_local'].min()
-        # max_date = df_time[df_time['question_sequence'] == df_time['question_sequence'].max()]['timestamp_local'].max()
+        starting_timestamp = df_time[df_time['event'].isin(['AnswerSet'])].groupby('interview__id')['timestamp_local'].min()
+        df_time['f__starting_timestamp'] = df_time['interview__id'].map(starting_timestamp)
+
+        min_date = df_time['f__starting_timestamp'].min()
         df_time['f__days_from_start'] = abs(
             (df_time['timestamp_local'] - min_date).dt.days)  # / (max_date-min_date).days
 
@@ -225,7 +227,7 @@ class FeatureProcessing(ImportManager):
         # streamline missing (empty, NaN) to '', important to identify duplicates in terms of the roster below
         paradata.fillna('', inplace=True)
 
-        paradata['f__answer_time_set'] = (paradata['timestamp_local'].dt.hour + paradata[
+        paradata['f__answer_hour_set'] = (paradata['timestamp_local'].dt.hour + paradata[
             'timestamp_local'].dt.round(
             '30min').dt.minute / 60)
 
@@ -503,7 +505,14 @@ class FeatureProcessing(ImportManager):
         pause_features = ['f__pause_count', 'f__pause_duration',
                           'f__pause_list']
         if any(col in self._allowed_features for col in pause_features):
-            df_pause = self.get_df_pause()
+            df_pause = self.get_df_time()
+            df_pause = df_pause.groupby('interview__id').agg(
+                f__pause_count=('f__pause_duration', 'size'),  # Count all occurrences
+                f__pause_duration=('f__pause_duration', 'sum'),  # Sum non-null values
+                f__pause_list=('f__pause_duration', lambda x: x.tolist())
+            )
+
+            df_pause = df_pause.reset_index()
             # Remove non-selected features
             pause_features = ['interview__id'] + [f for f in pause_features if f in self._allowed_features]
             df_pause = df_pause[pause_features]
@@ -518,27 +527,24 @@ class FeatureProcessing(ImportManager):
         pause_mask = (self.df_paradata['role'] == 1)
 
         df_paused_temp = self.df_paradata[pause_mask][
-            ['interview__id', 'order', 'event', 'timestamp_local', 'interviewing']].copy()
+            ['interview__id', 'order', 'event', 'timestamp_local', 'interviewing', 'question_sequence']].copy()
+
         df_paused_temp['prev_event'] = df_paused_temp.groupby('interview__id')['event'].shift(fill_value='')
         df_paused_temp['prev_datetime'] = df_paused_temp.groupby('interview__id')['timestamp_local'].shift()
+
 
         pause_mask = (df_paused_temp['event'].isin(['Restarted', 'Resumed']) &
                       df_paused_temp['prev_event'].isin(['Paused']))
 
         df_paused_temp = df_paused_temp.loc[pause_mask]
-        df_paused_temp['pause_duration'] = df_paused_temp['timestamp_local'] - df_paused_temp['prev_datetime']
+        df_paused_temp['f__pause_duration'] = df_paused_temp['timestamp_local'] - df_paused_temp['prev_datetime']
 
-        df_paused_temp['pause_seconds'] = df_paused_temp['pause_duration'].dt.total_seconds().astype('Int64')
-        df_paused_temp.loc[df_paused_temp['pause_seconds'] < 0, 'pause_seconds'] = pd.NA
-        df_paused_temp = df_paused_temp.groupby('interview__id').agg(
-            f__pause_count=('pause_seconds', 'size'),  # Count all occurrences
-            f__pause_duration=('pause_seconds', 'sum'),  # Sum non-null values
-            f__pause_list=('pause_seconds', lambda x: x.tolist())
-        )
+        df_paused_temp['f__pause_duration'] = df_paused_temp['f__pause_duration'].dt.total_seconds().astype('Int64')
+        df_paused_temp.loc[df_paused_temp['f__pause_duration'] < 0, 'f__pause_duration'] = pd.NA
 
-        # #convert Pause duration into minutes
-        # df_paused_temp['f__pause_duration'] = df_paused_temp['f__pause_duration']/60
-        df_paused_temp = df_paused_temp.reset_index()
+        min_pause_df = df_paused_temp.groupby('interview__id')['prev_datetime'].min()
+        df_paused_temp['starting_pause'] = df_paused_temp['interview__id'].map(min_pause_df)
+
         return df_paused_temp
 
     def add_unit_time_features(self, df_unit):
