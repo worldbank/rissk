@@ -143,7 +143,7 @@ class ItemFeatureProcessing(FeatureProcessing):
         model.fit(data[mask][coords_columns])
         data.loc[mask, 's__gps_spatial_outlier'] = model.predict(data[mask][coords_columns])
 
-        return data.drop(columns=['x', 'y', 'z', 'accuracy', 'distance_to_median', 'outlier'])
+        return data.drop(columns=['x', 'y', 'z', 'accuracy', 'distance_to_median', 'outlier'], errors='ignore')
 
     def make_score__sequence_jump(self):
         feature_name = 'f__sequence_jump'

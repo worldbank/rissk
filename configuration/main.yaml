@@ -12,7 +12,7 @@ export_path: /Users/gabriele/App/rowsquared/mlss/data/externals
 output_file: unit_risk_score.csv
 
 
-surveys: [ifad_tunesia]
+surveys: []
 survey_version: all
 reload: false
 extract: true
@@ -64,9 +64,11 @@ features:
     use: true
     sub_features: [gps_latitude, gps_longitude, gps_accuracy]
     parameters:
-      contamination: 0.10
+      contamination: 0.11
   pause_count:
     use: true
+    parameters:
+      contamination: 0.11
   pause_duration:
     use: true
     parameters:
@@ -79,6 +81,8 @@ features:
     use: true
   total_duration:
     use: true
+    parameters:
+      contamination: 0.11
   total_elapse:
     use: false
   single_question:
