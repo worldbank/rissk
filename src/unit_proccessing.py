@@ -68,12 +68,13 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
     def save(self):
         # TODO reduce decimal points to first digit
-        df = self._df_unit[['interview__id', 'responsible', 'unit_risk_score']].copy()
+        df = self._df_unit[['interview__id', 'responsible', 'unit_risk_score']]#.copy()
+        df['unit_risk_score'] = df['unit_risk_score'].round(2)
         df.sort_values('unit_risk_score', inplace=True)
         file_name = "_".join([self.config.surveys[0], self.config.survey_version[0], 'unit_risk_score']) + ".csv"
         output_path = self.config.output_file.split('.')[0] + '.csv'
         df.to_csv(output_path, index=False)
-        print(f'SUCCESS! you can find the unit_risk_score output file in {self.config.data.results}')
+        print(f'SUCCESS! you can find the unit_risk_score output file in {output_path}')
 
     def make_score_unit__numeric_response(self, feature_name):
         pass
@@ -93,13 +94,15 @@ class UnitDataProcessing(ItemFeatureProcessing):
         self._df_unit[score_name].fillna(0, inplace=True)
 
     def make_score_unit__multi_option_question(self, feature_name):
+        score_name = self.rename_feature(feature_name)
+        # multi_option_question is calculated at responsible level
         data = self.make_score__multi_option_question()
-        selected_columns = [col for col in data.columns if feature_name.replace('f__', '__') in col]
-        data['total'] = data[selected_columns].mean(1)
-        data['total'] = data.drop(columns=['responsible']).mean(1)
-        entropy_ = data.groupby('responsible')['total'].mean()
-
-        self._df_unit[feature_name.replace('f__', 's__')] = self._df_unit['responsible'].map(entropy_)
+        data = data.groupby(['responsible', 'variable_name']).agg({score_name: 'mean'})
+        data = data.reset_index()
+        data = data.groupby('responsible').agg({score_name: 'mean'})
+        self._df_unit[score_name] = self._df_unit['responsible'].map(data[score_name])
+        # Fill with 0's for missing values
+        self._df_unit[score_name].fillna(0, inplace=True)
 
     def make_score_unit__answer_hour_set(self, feature_name):
         data = self.make_score__answer_hour_set()
@@ -233,24 +236,40 @@ class UnitDataProcessing(ItemFeatureProcessing):
     def make_score_unit__pause_duration(self, feature_name):
         score_name = self.rename_feature(feature_name)
 
-        duration_mask = ~pd.isnull(self._df_unit[feature_name])
-        df = self._df_unit[duration_mask].copy()
-        k_list = [20, 30, 40, 50, 60]
-        # Number of classifiers being trained
-        contamination = self.get_contamination_parameter(feature_name, method='savgol', random_state=42)
+        def custom_pause_duration_binning(seconds):
+            if seconds < 3600 * 2:
+                return round(seconds / 600) * 10
+            elif 3600 * 2 <= seconds < 3600 * 5:
+                return round(seconds / 1800) * 30
+            elif 3600 * 5 <= seconds < 3600 * 24:  # 24 hours * 60 minutes/hour
+                return round(seconds / 60) * 60
+            else:
+                return round(seconds / 1440) * 1440
 
-        detector_list = [COF(n_neighbors=k, contamination=contamination) for k in k_list]
-        # Find anomalies in the distribution making use of COF anomaly detector.
-        # Connectivity-Based Outlier Factor (COF) COF uses the ratio of average chaining distance
-        # of data point and the average of average chaining distance of k nearest neighbor
-        # of the data point, as the outlier score for observations.
-        model = LSCP(detector_list)
-        scaler = StandardScaler()
-        df = windsorize_95_percentile(df)
-        df = pd.DataFrame(scaler.fit_transform(df), columns=df.columns)
-        model.fit(df[[feature_name]])
+        df = self.get_df_time()
+        duration_mask = ~pd.isnull(df[feature_name])
+        df = df[duration_mask]#.copy()
 
-        self._df_unit.loc[duration_mask, score_name] = model.predict(df[[feature_name]])
+        df[feature_name] = df[feature_name].astype(float)
+        #df[feature_name] = df[feature_name].apply(custom_pause_duration_binning).astype(float)
+
+        # Create a new column that has the hours mapped to order of frequency
+        sorted_pauses = df[feature_name].value_counts().index
+        hour_to_rank = {hour: rank for rank, hour in enumerate(sorted_pauses)}
+        # Sorting the DataFrame based on the 'frequency' column in descending order
+        df['frequency'] = df[feature_name].map(hour_to_rank)
+        df['frequency'].hist(bins=48)
+
+
+        contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
+        model = ECOD(contamination=contamination)
+
+        model.fit(df[['frequency']])
+
+        df.loc[duration_mask, score_name] = model.predict(df[['frequency']])
+
+        df = df.groupby('interview__id').agg({feature_name: 'mean'})
+        self._df_unit[score_name] = self._df_unit['interview__id'].map(df[feature_name])
         # Fill with 0's for missing values. It means "No anomalies detected"
         self._df_unit[score_name].fillna(1, inplace=True)
 
@@ -290,7 +309,7 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
     def make_score_unit__gps(self, feature_name):
         data = self.make_score__gps()
-        features = ['s__gps_proximity_counts', 's__gps_spatial_outlier']
+        features = ['s__gps_proximity_counts', 's__gps_spatial_outlier', 's__gps_spatial_extreme_outlier']
 
         data = data.groupby('interview__id')[features].sum()
         data = data.reset_index()
@@ -302,16 +321,17 @@ class UnitDataProcessing(ItemFeatureProcessing):
         self._df_unit['s__gps_spatial_outlier'] = self._df_unit['interview__id'].map(
             data.set_index('interview__id')['s__gps_spatial_outlier']
         )
+        self._df_unit['s__gps_spatial_extreme_outlier'] = self._df_unit['interview__id'].map(
+            data.set_index('interview__id')['s__gps_spatial_extreme_outlier']
+        )
 
         data = self.df_item.groupby('interview__id')[feature_name].sum()
-        data = data.reset_index()
         score_name = feature_name.replace('f__', 's__')
-        self._df_unit[score_name] = self._df_unit['interview__id'].map(
-            data.set_index('interview__id')[feature_name]
-        )
+        self._df_unit[score_name] = self._df_unit['interview__id'].map(data)
 
         self._df_unit['s__gps_proximity_counts'].fillna(0, inplace=True)
         self._df_unit['s__gps_spatial_outlier'].fillna(0, inplace=True)
+        self._df_unit['s__gps_spatial_extreme_outlier'].fillna(0, inplace=True)
 
     # def make_feature_unit__comments(self):
     #     columns_to_check = ['f__comments_set', 'f__comment_length']

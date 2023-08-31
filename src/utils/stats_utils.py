@@ -157,6 +157,46 @@ def get_box_cox_rescaled(series):
     return box_cox
 
 
+def calculate_list_entropy(column, unique_values, min_record_sample=10):
+    """
+    Calculate the normalized entropy of a given column.
+
+    Parameters:
+    - column (pd.Series): The column for which the entropy is calculated.
+    - unique_values (int): The number of unique values in the column.
+    - min_record_sample (int, optional): The minimum sample size required
+      relative to the number of unique values. Defaults to 10.
+
+    Returns:
+    - float or None: Returns normalized entropy if conditions are met,
+      0 for single value distributions with enough samples,
+      otherwise None.
+    """
+
+    column = column[column != '##N/A##']
+    flattened_series = column.explode()
+    # Compute the probability distribution of unique values in the column
+    # This uses value counts and then normalizes the counts to get probabilities
+    prob_distribution = flattened_series.value_counts(normalize=True)
+
+    # Check conditions to calculate normalized entropy:
+    # 1. There should be more than one unique value
+    # 2. The number of records should be above a certain threshold
+    #    based on the number of unique values
+    if unique_values > 1 and flattened_series.shape[0] >= min_record_sample * unique_values:
+        entropy_ = entropy(prob_distribution.values) / np.log2(unique_values)
+    # Check conditions where entropy is 0:
+    # 1. Only one unique value is present in the distribution
+    # 2. The number of records meets the required threshold
+    elif unique_values == 1 and flattened_series.shape[0] >= min_record_sample * unique_values:
+        entropy_ = 0
+    # If none of the above conditions are met, return None
+    else:
+        entropy_ = None
+
+    return entropy_
+
+
 def calculate_entropy(column, unique_values, min_record_sample=10):
     """
     Calculate the normalized entropy of a given column.
