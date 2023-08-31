@@ -1,6 +1,4 @@
 import json
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
 import numpy as np
 import os
@@ -358,7 +356,7 @@ def get_questionaire(survey_path, survey_name, survey_version):
     qnr_df = pd.DataFrame()
     questionaire_path = os.path.join(survey_path, 'Questionnaire/content/document.json')
     if os.path.exists(questionaire_path):
-        with open(questionaire_path) as file:
+        with open(questionaire_path, encoding='utf8') as file:
             json_data = json.load(file)
 
         question_data = []
@@ -423,7 +421,12 @@ def get_paradata(survey_path, df_questionnaires, survey_name, survey_version):
     df_para = set_survey_name_version(df_para, survey_name, survey_version)
 
     if df_questionnaires.empty is False:
-        df_para = df_para.merge(df_questionnaires, how='left', left_on=['param', 'survey_name', 'survey_version'],
+        q_columns = ['qnr_seq', 'variable_name', 'type', 'question_type', 'answers', 'question_scope',
+                     'yes_no_view', 'is_filtered_combobox',
+                     'is_integer', 'cascade_from_question_id', 'answer_sequence', 'n_answers', 'question_sequence',
+                     'survey_name', 'survey_version']
+        df_para = df_para.merge(df_questionnaires[q_columns], how='left',
+                                left_on=['param', 'survey_name', 'survey_version'],
                                 right_on=['variable_name', 'survey_name', 'survey_version'])
 
     # Normalize column names
