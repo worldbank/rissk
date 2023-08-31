@@ -72,6 +72,15 @@ Detects XYZ...
 
 straightlining (selecting the same answer options in repeated rating questions), or selection of non-extreme values in fabrication, lasting/firsting
 
+average
+
+entropy calculates how predictibale is a
+
+0 entory distribution is highly predictable, means always selects the same values/ answer positions
+1 means not predictable, selects often different values 
+
+
+
 ## answers_selected
 
 Detects XYZ...
@@ -296,8 +305,10 @@ To control the sensibility of the outlier detection algorithm, `f__total_duratio
 ## multi_option_question
 
 **Feature**
-
+values selected for multi option questions 
 **Score**
+
+same as answer_position
 
 # Not included
 

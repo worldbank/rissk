@@ -12,7 +12,7 @@ export_path: /Users/gabriele/App/rowsquared/mlss/data/externals
 output_file: unit_risk_score.csv
 
 
-surveys: [EPforR_TAP]
+surveys: [ifad_tunesia]
 survey_version: all
 reload: false
 extract: true
