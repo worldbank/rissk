@@ -51,14 +51,14 @@ pip install -r requirements.txt
 
 1. **Export data from Survey Solutions**: Export both the **Main Survey Data** and **Paradata** for all versions of a single questionnaire (survey template). The Main Survey Data must be in either  **Tab separated** or **Stata 14** format and must **include meta information about questionnaire**.
 
-2. **Prepare export folder**: Place the exported zip files into a designated folder. The path to this folder will be referred to as `<export_path>` in the following steps. Do not modify the zip files. The folder should contain one zip file each for Paradata and Main Survey Data for every version of the questionnaire you wish to analyze. To exclude certain versions, simply omit their corresponding files.
+2. **Prepare export folder**: Place the exported zip files into a designated folder. The path to this folder will be referred to as `<export_path>` in the following steps. Do not modify or rename the zip files. The folder should contain one zip file each for Paradata and Main Survey Data for every version of the questionnaire you wish to analyze. To exclude certain versions, simply omit their corresponding files.
 
 3. **Navigate to RISSK directory**: If you are running the package after installation, navigate to the `rissk` directory with the following command:
 ```
 cd /Users/USER/projects/rissk
 ```
 4. **Execute the Package**: Run the package using the command below, replacing:
-   - `<export_path>` with the path to the folder containing your Survey Solutions export data.
+   - `<export_path>` with the **absolute** path to the folder containing your Survey Solutions export data.
    - `<output_file>` with the complete file path for the output CSV file. Note that you must specify the full path, not just the file name. If this is not provided, the results will be stored in the default file  `rissk/result/unit_risk_score.csv`.
 ```
 python main.py export_path=<export_path> output_file=<output_file>
@@ -118,7 +118,7 @@ To identify these anomalies, RISSK analyzes the following features:
 - Distribution and selection of answers
 - Statistical properties of answers (variance, entropy, etc.)
 
- <!--To find out which features and score drive the `unit_risk_score`, use the optional export, see chapter [Export score and feature files](#export-score-and-feature-files).--> For more information on how URS is calculated, refer to chapter [Process description](#process-description). For a detailed breakdown of all features and scores, consult [FEATURS_SCORES.md](FEATURES_SCORES.md).  
+ <!--To find out which features and score drive the `unit_risk_score`, use the optional export, see chapter [Export score and feature files](#export-score-and-feature-files).--> For more information on how URS is calculated, refer to chapter [Process description](#process-description). For a detailed breakdown of all features and scores, consult [FEATURES_SCORES.md](FEATURES_SCORES.md).  
 
 > [!WARNING]
 > The URS is **not** definitive proof of interviewer misconduct. It may include **false positives**, where legitimate interviews receive high scores due to unusual circumstances, and **false negatives**, where problematic interviews receive low scores because they contain few or no detectable anomalies. To conclusively identify interviewer misconduct, further verification and review is required. See [Survey integration](#survey-integration) for more details.
@@ -245,17 +245,18 @@ To measure RISSK's utility in a practical survey setting, we sorted the intervie
 The table below summarizes the results for the top 5, 10, 15 and 20 percent: 
 
 |    N | Share selecting top URS<br/>(share_urs) |    Share selecting at random <br/>(share_rand) | Ratio<br/>(share_urs/share_rand) |
-|-----:|----------------------------------------------------------------:|-----------------------------------------------:|--------------------------:|
-|   5% |                                                           66.1% |                                          22.4% |                       2.8 |
-|  10% |                                                               x |                                          22.4% |                         x |
-|  15% |                                                               y |                                          22.4% |                         y |
-|  20% |                                                               z |                                          22.4% |                         z |
+|-----:|----------------------------------------:|-----------------------------------------------:|---------------------------------:|
+|   5% |                                     71% |                                          22.4% |                              3.2 |
+|  10% |                                     53% |                                          22.4% |                              2.3 |
+|  15% |                                     47% |                                          22.4% |                              2.1 |
+|  20% |                                     46% |                                          22.4% |                              2.1 |
 
-In our test, selecting the top 5% of interviews based on their URS yielded 2.8 times more artificially created interviews than if selected randomly. This ratio decreases as we select a larger percentage of interviews, but at 1.4 for 20% continues to be signifcantly higher within the range of review/verification ratios common in surveys. 
+In our test, selecting the top 5% of interviews based on their URS yielded 2.8 times more artificially created interviews than if selected randomly. This ratio decreases as we select a larger percentage of interviews, but at 1.4 for 20% continues to be significantly higher within the range of review/verification ratios common in surveys. 
 
 Below chart summarizes how `share_urs` behaves as we increase the number of interviews selected continuously from 1 to 100 of all interviews. The horizontal line at 22.4% equals `share_rand`. 
 
-<!-- add chart -->
+![experiment](images/experiment.png)
+
 
 Please note that these results are based on the classification of interviews as either real or artificially created, according to the experiment's design. While none of the artificially created interviews can be devoid of issues, some of the real interviews with relatively high `unit_risk_score` may also contain problematic behavior. This could potentially increase the `share_urs` value, further demonstrating the utility of the tool in identifying at-risk interviews.
 
