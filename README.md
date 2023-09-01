@@ -159,9 +159,7 @@ The URS is specifically designed to guide the **initial** review or verification
 
 For each batch of interviews, it's most efficient to prioritize those with the **highest URS values** for review or verification, as they are most likely to contain issues. In our [experiment](#experiment), 71% of interviews that fell within the top 5% of URS values were fabricated. However, because the URS can also include false negatives it may be beneficial to include some interviews with lower URS values in your review process. For instance, one approach could be to review or verify 10% of interviews with the highest URS in each batch, along with an additional random 5% drawn from the remaining pool. This could also be tailored to focus on specific interviewers or other criteria.
 
-**Review/Verification**
-
----
+<h3 style="margin: 1em 0;">Review/Verification</h3>
 
 The process of reviewing or verifying interviews can involve various activities:
 
