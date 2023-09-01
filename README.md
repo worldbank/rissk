@@ -25,8 +25,7 @@ cd /Users/USER/projects
 ```
 git clone git@github.com:WorldBank/rissk.git
 ```
-  - If you do not have a GitHub account, or experience problems cloning the repository, instead, [download](https://github.com/worldbank/rissk/archive/refs/heads/main.zip) the repository as a ZIP file, unzip it into your active working directory or the folder specified in Step 1, and rename the folder from `rissk-main` to `rissk`, as is shown below. ![Rename folder](images/unzip_folder_name.png)
-3. **Alternative to Step 2**: 
+  - If you do not have a GitHub account or experience problems cloning the repository, instead [download](https://github.com/worldbank/rissk/archive/refs/heads/main.zip) the repository as a ZIP file, unzip it into your active working directory or the folder specified in Step 1, and rename the folder from `rissk-main` to `rissk`. <details><summary>Click to see a screenshot of the required folder structure.</summary>![Rename folder](images/unzip_folder_name.png)</details> as is shown below. 
 3. **Navigate to the project directory**: Move into the newly created `rissk` directory with:.
 ```
 cd rissk
@@ -60,7 +59,7 @@ pip install -r requirements.txt
    - For the **Paradata**, under Data Type, select the option labelled **Paradata**. <details><summary>Click to see a screenshot of the selected export options for Paradata.</summary>![Export options Paradata](images/export_para.png)</details>
 
 3. **Place export files into the export folder**: Place both ZIP files into the `<export_path>` folder. Do not modify, rename or unzip the files. The folder should contain only the Main Survey Data and Paradata export files for a single version. 
-4. **Compatible versions**: If multiple versions of the **same** survey template (questionnaire) are compatible and you wish to evaluate them together, export both, the Main Survey Data and Paradata for all versions. Place the unmodified ZIP files into the `<export_path>` folder. When running the package, you will need to specify option `all_versions==TRUE` (see Step 2 below). **Do not include** export files from different survey templates (questionnaires). 
+4. **Compatible versions**: If multiple versions of the **same** survey template (questionnaire) are compatible and you wish to evaluate them together, export both, the Main Survey Data and Paradata for all versions. Place the unmodified ZIP files into the `<export_path>` folder. When running the package, you will need to specify option `all_versions==TRUE` (see Step 2 in the subsection Running the package). **Do not include** export files from different survey templates (questionnaires). 
 
 
 ## Running the package
@@ -248,26 +247,26 @@ We utilized a real CATI survey dataset (specific details are confidential). To t
 6. **Non-incentivized, low effort**. Fake without putting effort.
 7. **Incentivized, speed**. Fake as fast as possible. 
 
-These artificially created interviews were then mixed with 268 real interviews, creating a test set of 345 interviews. Real interviews for this survey are believed to be of general low-risk, as they were conducted by a small team of interviewers with a trusted, long-term relationship, incentives to perform well and deterrents to do badly, as well as a good data monitoring structure in place. Furthermore, interviewers were aware that the data they collected would be used to validate secondary data and that discrepancies would be investigated. Nevertheless, it could not be ruled out that some real interviews contained problematic interviewer behaviour. 
+These artificial fake interviews were then mixed with 268 real interviews, creating a test set of 345 interviews. Real interviews for this survey are believed to be of general low-risk, as they were conducted by a small team of interviewers with a trusted, long-term relationship, incentives to perform well and deterrents to do badly, as well as a good data monitoring structure in place. Furthermore, interviewers were aware that the data they collected would be used to validate secondary data and that discrepancies would be investigated. Nevertheless, it could not be ruled out that some real interviews contained problematic interviewer behaviour. 
 
-**Metrics**
+## Metrics
 
-When using `unit_risk_score` to cluster interviews into real and fake, we achieve a [recall](https://en.wikipedia.org/wiki/Precision_and_recall)/[sensitivity](https://en.wikipedia.org/wiki/Sensitivity_and_specificity) of 61%, meaning that 61% of the artificially created interviews were correctly classified. 
+When using `unit_risk_score` to cluster interviews into real and fake, we achieve a [recall](https://en.wikipedia.org/wiki/Precision_and_recall)/[sensitivity](https://en.wikipedia.org/wiki/Sensitivity_and_specificity) of 61%, meaning that 61% of the artificial fake interviews were correctly classified. 
 
-To measure RISSK's utility in a practical survey setting, we sorted the interviews by `unit_risk_score`, select the top _N%_ - as would be done if using the URS to prioritize interviews for review/verification - and calculate the share of artificially created interviews `share_urs`. We compare this to `share_rand`, the share of fakes one would obtain if selecting _N%_ at random, which is equal to the prevalence of artificially created interviews in the data. We also calculate the ratio of `share_urs/share_rand` measuring how many more artificially created interviews are contained in the selection guided by URS vs a random selection.  
+To measure RISSK's utility in a practical survey setting, we sorted all interviews by `unit_risk_score`, select the top _N%_ - as would be done if using the URS to prioritize interviews for review/verification - and calculate the share of artificial fake interviews `share_urs`. We compare this to `share_rand`, the share of artificial fakes one would obtain if selecting _N%_ at random, which is equal to the prevalence of artificial fakes in the data. We also calculate the ratio of `share_urs/share_rand` measuring how many more artificial fake interviews are contained in the selection guided by URS vs a random selection.  
 
-**Results**
+## Results
 
 The table below summarizes the results for the top 5, 10, 15 and 20 percent: 
 
-|    N | Share selecting top URS<br/>(share_urs) |    Share selecting at random <br/>(share_rand) | Ratio<br/>(share_urs/share_rand) |
-|-----:|----------------------------------------:|-----------------------------------------------:|---------------------------------:|
-|   5% |                                     71% |                                          22.4% |                              3.2 |
-|  10% |                                     53% |                                          22.4% |                              2.3 |
-|  15% |                                     47% |                                          22.4% |                              2.1 |
-|  20% |                                     46% |                                          22.4% |                              2.1 |
+|    N |                      Share selecting top URS<br/>(share_urs) |    Share selecting at random <br/>(share_rand) | Ratio<br/>(share_urs/share_rand) |
+|-----:|-------------------------------------------------------------:|-----------------------------------------------:|---------------------------------:|
+|   5% |                                                          71% |                                          22.4% |                              3.2 |
+|  10% |                                                          53% |                                          22.4% |                              2.3 |
+|  15% |                                                          47% |                                          22.4% |                              2.1 |
+|  20% |                                                          46% |                                          22.4% |                              2.1 |
 
-In our test, selecting the top 5% of interviews based on their URS yielded 2.8 times more artificially created interviews than if selected randomly. This ratio decreases as we select a larger percentage of interviews, but at 1.4 for 20% continues to be significantly higher within the range of review/verification ratios common in surveys. 
+In our test, selecting the top 5% of interviews based on their URS yielded 2.8 times more artificial fakes than if selected randomly. This ratio decreases as we select a larger percentage of interviews, but at 1.4 for 20% continues to be significantly higher within the range of review/verification ratios common in surveys. 
 
 Below chart summarizes how `share_urs` behaves as we increase the number of interviews selected continuously from 1 to 100 of all interviews. The horizontal line at 22.4% equals `share_rand`. 
 
