@@ -52,14 +52,9 @@ pip install -r requirements.txt
 1. **Prepare export folder**: Create or select a folder to hold the Survey Solution export files. It can be in or outside the `rissk` directory. The absolute path to this folder will be referred to as `<export_path>` in subsequent steps. Make sure the folder is empty and does not contain any old export files.
 
 2. **Export data from Survey Solutions**: Export and download both the Main Survey Data and Paradata. Make sure they are from the **same version** and **consecutively**, to ensure they are compatible and comparable. **Do not modify or rename** the ZIP files.
-   - For the **Main Survey Data**, choose the options **Main Survey Data**, **Include meta information about questionnaire** and either **Tab separated data** or **Stata 14 format**
- <details>
-  <summary>Click to see example.</summary>
-  
-  ![Export options Main Survey Data](images/export_main.png)
- </details>
+   - For the **Main Survey Data**, choose the options **Main Survey Data**, **Include meta information about questionnaire** and either **Tab separated data** or **Stata 14 format**<details><summary>Click to see example.</summary>![Export options Main Survey Data](images/export_main.png)</details>
 
-   - For the **Paradata**, under Data Type, select the option labelled **Paradata**. [Export options Paradata](images/export_para.png)
+   - For the **Paradata**, under Data Type, select the option labelled **Paradata**. [View a screenshot](images/export_para.png) of the selected export options.
 
 3. **Place export files into the export folder**: Place both ZIP files into the `<export_path>` folder. Do not modify, rename or unzip the files. The folder should contain only the Main Survey Data and Paradata export files for a single version. 
 4. **Compatible versions**: If multiple versions of the **same** survey template (questionnaire) are compatible and you wish to evaluate them together, export both, the Main Survey Data and Paradata for all versions. Place the unmodified ZIP files into the `<export_path>` folder. When running the package, you will need to specify option `all_versions==TRUE` (see Step 2 below). **Do not include** export files from different survey templates (questionnaires). 
