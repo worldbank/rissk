@@ -52,7 +52,13 @@ pip install -r requirements.txt
 1. **Prepare export folder**: Create or select a folder to hold the Survey Solution export files. It can be in or outside the `rissk` directory. The absolute path to this folder will be referred to as `<export_path>` in subsequent steps. Make sure the folder is empty and does not contain any old export files.
 
 2. **Export data from Survey Solutions**: Export and download both the Main Survey Data and Paradata. Make sure they are from the **same version** and **consecutively**, to ensure they are compatible and comparable. **Do not modify or rename** the ZIP files.
-   - For the **Main Survey Data**, choose the options **Main Survey Data**, **Include meta information about questionnaire** and either **Tab separated data** or **Stata 14 format**![Export options Main Survey Data](images/export_main.png)
+   - For the **Main Survey Data**, choose the options **Main Survey Data**, **Include meta information about questionnaire** and either **Tab separated data** or **Stata 14 format**
+   <details>
+  <summary>Click to see example.</summary>
+  
+  ![Export options Main Survey Data](images/export_main.png)
+   </details>
+
    - For the **Paradata**, under Data Type, select the option labelled **Paradata**. ![Export options Paradata](images/export_para.png)
 
 3. **Place export files into the export folder**: Place both ZIP files into the `<export_path>` folder. Do not modify, rename or unzip the files. The folder should contain only the Main Survey Data and Paradata export files for a single version. 
@@ -268,7 +274,6 @@ In our test, selecting the top 5% of interviews based on their URS yielded 2.8 t
 Below chart summarizes how `share_urs` behaves as we increase the number of interviews selected continuously from 1 to 100 of all interviews. The horizontal line at 22.4% equals `share_rand`. 
 
 ![experiment](images/experiment.png)
-
 
 Please note that these results are based on the classification of interviews as either real or artificially created, according to the experiment's design. While none of the artificially created interviews can be devoid of issues, some of the real interviews with relatively high `unit_risk_score` may also contain problematic behavior. This could potentially increase the `share_urs` value, further demonstrating the utility of the tool in identifying at-risk interviews.
 
