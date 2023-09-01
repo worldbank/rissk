@@ -47,25 +47,31 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Setting up export folder
+
+1. **Prepare export folder**: Create or select a folder to hold the Survey Solution export files. It can be in or outside the `rissk` directory. The absolute path to this folder will be referred to as `<export_path>` in subsequent steps. Make sure the folder is empty and does not contain any old export files.
+
+2. **Export data from Survey Solutions**: Export and download both the Main Survey Data and Paradata. Make sure they are from the **same version** and **consecutively**, to ensure they are compatible and comparable. **Do not modify or rename** the ZIP files.
+   - For the **Main Survey Data**, choose the options **Main Survey Data**, **Include meta information about questionnaire** and either **Tab separated data** or **Stata 14 format**![Export options Main Survey Data](images/export_main.png)
+   - For the **Paradata**, under Data Type, select the option labelled **Paradata**. ![Export options Paradata](images/export_para.png)
+
+3. **Place export files into the export folder**: Place both ZIP files into the `<export_path>` folder. Do not modify, rename or unzip the files. The folder should contain only the Main Survey Data and Paradata export files for a single version. 
+4. **Compatible versions**: If multiple versions of the **same** survey template (questionnaire) are compatible and you wish to evaluate them together, export both, the Main Survey Data and Paradata for all versions. Place the unmodified ZIP files into the `<export_path>` folder. When running the package, you will need to specify option `all_versions==TRUE` (see Step 2 below). **Do not include** export files from different survey templates (questionnaires). 
+
+
 ## Running the package
 
-1. **Export data from Survey Solutions**: Export both the **Main Survey Data** and **Paradata** for all versions of a single questionnaire (survey template). The Main Survey Data must be in either  **Tab separated** or **Stata 14** format and must **include meta information about questionnaire**.
-![Export options Paradata](images/export_para.png)
-![Export options Main Survey Data](images/export_main.png | width=50)
-
-2. **Prepare export folder**: Place the exported zip files into a designated folder. The path to this folder will be referred to as `<export_path>` in the following steps. Do not modify or rename the zip files. The folder should contain one zip file each for Paradata and Main Survey Data for every version of the questionnaire you wish to analyze. To exclude certain versions, simply omit their corresponding files.
-
-3. **Navigate to RISSK directory**: If you are running the package after installation, navigate to the `rissk` directory with the following command:
+1. **Navigate to RISSK directory**: If you are running the package after installation, navigate to the `rissk` directory with the following command:
 ```
 cd /Users/USER/projects/rissk
 ```
-4. **Execute the Package**: Run the package using the command below, replacing:
+2. **Execute the Package**: Run the package using the command below, replacing:
    - `<export_path>` with the **absolute** path to the folder containing your Survey Solutions export data.
    - `<output_file>` with the complete file path for the output CSV file. Note that you must specify the full path, not just the file name. If this is not provided, the results will be stored in the default file  `rissk/result/unit_risk_score.csv`.
 ```
 python main.py export_path=<export_path> output_file=<output_file>
 ```
-5. **Monitor progress**: After running the command, console logs will indicate the package's progress. Upon successful completion, a confirmation message will appear, indicating that the results have been saved to the specified directory.
+3. **Monitor progress**: After running the command, console logs will indicate the package's progress. Upon successful completion, a confirmation message will appear, indicating that the results have been saved to the specified directory.
 <!-- Do we have a message saying it's done?, Any python logs that can be removed-->
 
 # Advanced use
@@ -152,14 +158,13 @@ If possible, integrate RISSK into your survey's data management and monitoring s
 - Use the output to identify interviews for review/verification and add them to the backlog for supervisors or data monitors.
 - Incorporate URS values into your monitoring dashboard alongside other indicators.
 
-**Interview prioritization**
-
+## Interview prioritization
 
 The URS is specifically designed to guide the **initial** review or verification of an interview. It only takes into account data collected before any interactions by a Supervisor or HQ role. Any actions taken by the interviewer after the first review or rejection should be monitored through other means.
 
 For each batch of interviews, it's most efficient to prioritize those with the **highest URS values** for review or verification, as they are most likely to contain issues. In our [experiment](#experiment), 71% of interviews that fell within the top 5% of URS values were fabricated. However, because the URS can also include false negatives it may be beneficial to include some interviews with lower URS values in your review process. For instance, one approach could be to review or verify 10% of interviews with the highest URS in each batch, along with an additional random 5% drawn from the remaining pool. This could also be tailored to focus on specific interviewers or other criteria.
 
-<h3 style="margin: 1em 0;">Review/Verification</h3>
+## Review/Verification
 
 The process of reviewing or verifying interviews can involve various activities:
 
@@ -172,7 +177,7 @@ It is advisable to keep a structured record of the outcome of the review/verific
 
 If problematic interviewer misbehaviour is confirmed, timely and appropriate consequences should ensue. These can range from a stern warning (akin to a "yellow card") to the loss of a bonus or even dismissal in cases of intentional misconduct such as data fabrication. For unintentional mistakes or if an interviewer is struggling, tailored feedback, explanatory phone calls, or in-person retraining may be necessary. Failure to address issues promptly can lead to persistent problems during fieldwork, negatively impacting data quality.
 
-**Feedback to interviewers**
+## Feedback to interviewers
 
 Informing interviewers that their activities are closely monitored and that an algorithm is used to flag suspicious cases typically offers two benefits:
 
@@ -185,7 +190,7 @@ For instance, providing feedback like, _"Your interview was flagged because it t
 
 Additionally, aim to provide feedback that is both **useful and actionable**. Generalized statements like, _"Your interview scored high; stop doing whatever you're doing wrong,"_ are not helpful. Instead, try to identify the underlying issues through verification or review and tailor your feedback accordingly. For instance, you could say, _"We've noticed that your interviews are unusually short and involve fewer households engaged in agriculture. If the respondent says 'No' in Q1, make sure to probe for XYZ. If the respondent mentions ABC, it should also be considered as a 'Yes' in Q1."_
 
-**Monitoring**
+## Monitoring
 
 To use the URS as a monitoring indicator, average `unit_risk_score` by interviewer (and/or team) and over time (week/month), and visualize it e.g. as part of a survey monitoring dashboard. While individual interviews by one interviewer may not score high enough to be reviewed/verified, a repeated high average score over time for one interviewer may signal potential issues and the need to take action. Monitoring the average URS by interviewer and time also helps to check if interviewers have adjusted to feedback or warnings (lower URS post-intervention) or continue to produce problematic interviews (equal or higher URS).
 
@@ -217,11 +222,11 @@ To use the URS as a monitoring indicator, average `unit_risk_score` by interview
 
 # Confirmation of results
 
+<!--
 **Testing**
 
 confirmation on tests (in our tests we observed that x moving up, moved up the score by ... )
-
-<!-- Going to do this or should I delete -->
+ -->
 
 ## Experiment
 
@@ -274,7 +279,7 @@ Please note that these results are based on the classification of interviews as 
 
 This chapter outlines the key steps that the RISSK package follows to generate the Unit Risk Score (URS).
 
-**Data preparation**
+## Data preparation
 
 1. **Unzipping files**. The tool scans the directory specified by  `<export_path>` for Survey Solutions export files in the Paradata and either STATA or Tabular format. Each version's export files are unzipped to a subfolder within `rissk/data/raw/<survey_name>`. Within each version's subfolder, the `Questionnaire/content.zip` file is further unzipped.
 
@@ -293,7 +298,7 @@ This chapter outlines the key steps that the RISSK package follows to generate t
 
 5. **Appending versions**. Finally, the questionnaire, microdata, and paradata dataframes from all versions are appended to create comprehensive dataframes for each.
 
-**Indicator generation**
+## Indicator generation
 
 7. **Isolating interviewing events**. The paradata and microdata are filtered to focus solely on what we term _interviewing events_ which approximates the initial interview process, prior to any corrections or updates that may occur after the first intervention by Supervisor or HQ roles. 
     - In the paradata of every interview, the first event of type `['RejectedBySupervisor', 'OpenedBySupervisor', 'RejectedByHQ', 'OpenedByHQ']` is identified and all subsequent events are removed from the dataframe.
@@ -302,15 +307,11 @@ This chapter outlines the key steps that the RISSK package follows to generate t
 
 8. **Constructing features**. Various features are derived from the refined paradata and microdata. These features can either be unit-level, referring to the entire interview, or item-level, pertaining to the answer of an individual question on a roster instance/row. Features are absolute values, such as the time spent on a particular question measured in seconds. For a detailed explanation of how each feature is calculated, refer to [FEATURES_SCORES.md](FEATURES_SCORES.md).
 
-**Generating scores**
+## Generating scores
 
 9. **Evaluation and score calculation**: Individual features are assessed and corresponding scores generated. The general approach involves identifying anomalies within the feature, either at the item or unit level, and then calculating the proportion of these anomalies either at the unit or interviewer level. For a comprehensive guide on how each score is formulated, please consult [FEATURES_SCORES.md](FEATURES_SCORES.md).
 
 10. **Score aggregation and normalization**: Individual scores are synthesized using Principal Component Analysis (PCA). This statistical method reduce the complexity of data (in our case the individual scores) while retaining as much information as possible, making it a useful technique to build scores or ranks. The PCA output is normalized and [windsorized](https://en.wikipedia.org/wiki/Winsorizing) to mitigate the impact of extreme outliers. The resulting `unit_risk_score` is scaled to range between 0 and 100, making it easier to interpret.
-
-<!-- what about the alternative methods, why did we decided against it, why PCS-->
-
-<!-- can we weigh features? -->
 
 # Roadmap
 
