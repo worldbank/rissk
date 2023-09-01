@@ -50,6 +50,8 @@ pip install -r requirements.txt
 ## Running the package
 
 1. **Export data from Survey Solutions**: Export both the **Main Survey Data** and **Paradata** for all versions of a single questionnaire (survey template). The Main Survey Data must be in either  **Tab separated** or **Stata 14** format and must **include meta information about questionnaire**.
+![Export options Paradata](images/export_para.png)
+![Export options Main Survey Data](images/export_main.png | width=50)
 
 2. **Prepare export folder**: Place the exported zip files into a designated folder. The path to this folder will be referred to as `<export_path>` in the following steps. Do not modify or rename the zip files. The folder should contain one zip file each for Paradata and Main Survey Data for every version of the questionnaire you wish to analyze. To exclude certain versions, simply omit their corresponding files.
 
@@ -155,9 +157,11 @@ If possible, integrate RISSK into your survey's data management and monitoring s
 
 The URS is specifically designed to guide the **initial** review or verification of an interview. It only takes into account data collected before any interactions by a Supervisor or HQ role. Any actions taken by the interviewer after the first review or rejection should be monitored through other means.
 
-For each batch of interviews, it's most efficient to prioritize those with the **highest URS values** for review or verification, as they are most likely to contain issues. In our [experiment](#experiment), 67% of interviews that fell within the top 10% of URS values were fabricated. However, because the URS can also include false negatives it may be beneficial to include some interviews with lower URS values in your review process. For instance, one approach could be to review or verify 10% of interviews with the highest URS in each batch, along with an additional random 5% drawn from the remaining pool. This could also be tailored to focus on specific interviewers or other criteria.
+For each batch of interviews, it's most efficient to prioritize those with the **highest URS values** for review or verification, as they are most likely to contain issues. In our [experiment](#experiment), 71% of interviews that fell within the top 5% of URS values were fabricated. However, because the URS can also include false negatives it may be beneficial to include some interviews with lower URS values in your review process. For instance, one approach could be to review or verify 10% of interviews with the highest URS in each batch, along with an additional random 5% drawn from the remaining pool. This could also be tailored to focus on specific interviewers or other criteria.
 
 **Review/Verification**
+
+---
 
 The process of reviewing or verifying interviews can involve various activities:
 
@@ -202,7 +206,12 @@ To use the URS as a monitoring indicator, average `unit_risk_score` by interview
 
 - **Data Format**: As of now, RISSK doesn't support SPSS format for microdata exports from Survey Solutions. Use STATA or TAB formats instead.
 
+- **Version Compatibility**: RISSK is designed to support export formats from Survey Solutions version 23.06 and later. While it may be possible to use RISSK with earlier versions, such compatibility has not been officially tested.
+
 - **Non-Contact and non-response**: Interviews containing non-contact or non-response cases can distort the URS, as these often follow an atypical path through the questionnaire.
+
+- **Interviews in Progress**: When using the online Interviewer, incomplete interviews that are still in progress can be included in the analysis, potentially distorting the URS. To minimize this issue, it's advisable to run RISSK during periods when there is minimal interviewing activity, such as during nighttime hours.
+ 
 
 - **Question Types**: No microdata based features have been developed for barcode, picture, audio, and geography questions. These question types are only considered through their related events in the paradata.
 
