@@ -56,8 +56,8 @@ features:
     use: true
   sequence_jump:
     use: true
-  string_length:
-    use: false
+    parameters:
+      contamination: 0.1
   time_changed:
     use: true
   gps:
@@ -79,16 +79,20 @@ features:
     use: false
   number_answered:
     use: true
+    parameters:
+      contamination: 0.11
   total_duration:
     use: true
     parameters:
       contamination: 0.11
   total_elapse:
-    use: false
+    use: true
+    parameters:
+      contamination: 0.1
   single_question:
     use: false
   multi_option_question:
-      use: false
+      use: true
   days_from_start:
     use: false
   comment_length:
@@ -96,4 +100,6 @@ features:
   comment_set:
     use: false
   comment_duration:
+    use: false
+  string_length:
     use: false

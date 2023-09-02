@@ -1,10 +1,9 @@
 from src.item_processing import *
-from src.utils.stats_utils import *
 from src.detection_algorithms import *
-from scipy import stats
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, Normalizer, PowerTransformer
-from sklearn.decomposition import PCA
-from pyod.models.lscp import LSCP
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+# from sklearn.decomposition import PCA
+from pyod.models.pca import PCA
+from pyod.models.iforest import IForest
 
 
 def windsorize_95_percentile(df):
@@ -44,7 +43,7 @@ class UnitDataProcessing(ItemFeatureProcessing):
                     getattr(self, method_name)(feature_name)
                     # print('Score{} Processed'.format(feature_name))
                 except Exception as e:
-                    print("ERROR ON FEATURE SCORE: {}, It won't be used in further calculation".format(feature_name))
+                    print("WARNING: SCORE: {} won't be used in further calculation".format(feature_name))
 
         score_columns = [col for col in self._df_unit if
                          col.startswith('s__')]  # and col.replace('s__','f__') in  self._allowed_features]
@@ -52,23 +51,52 @@ class UnitDataProcessing(ItemFeatureProcessing):
         self._score_columns = self._df_unit[score_columns].columns[self._df_unit[score_columns].nunique() > 1].tolist()
         return self._df_unit[['interview__id', 'responsible', 'survey_name', 'survey_version', ] + self._score_columns]
 
-    def make_global_score(self):
+    def make_global_score(self, combine_resp_score=True, restricted_columns=None):
+        self._df_unit['unit_risk_score'] = 0
         scaler = StandardScaler()
         df = self.df_unit_score[self._score_columns]
-        df = windsorize_95_percentile(df)# .astype(float).apply(adjustable_winsorize)
-        df = pd.DataFrame(scaler.fit_transform(df), columns=self._score_columns)
-        pca = PCA(n_components=0.99, whiten=True, random_state=42)
-
-        # Conduct PCA
-        df_pca = pca.fit_transform(df.fillna(0))
+        columns = self._score_columns
+        if restricted_columns is not None:
+            columns = [col for col in self._score_columns if col not in restricted_columns]
+        # df = windsorize_95_percentile(self.df_unit_score[columns].copy())
+        df = df[columns].copy()
+        df = pd.DataFrame(scaler.fit_transform(df), columns=columns)
+        model = IForest(random_state=42)
+        model.fit(df.fillna(0))
         scaler = MinMaxScaler(feature_range=(0, 100))
-        self._df_unit['unit_risk_score'] = (df_pca * pca.explained_variance_ratio_).sum(axis=1)
+        self._df_unit['unit_risk_score'] = model.decision_scores_
 
+        # Merge unit score with responsible score
+        if combine_resp_score:
+            # Make responsible Score
+            self._df_unit['unit_risk_score'] = scaler.fit_transform(self._df_unit[['unit_risk_score']])
+
+            self.make_responsible_score(restricted_columns=columns)
+            merged_df = self._df_unit.merge(self._df_resp[['responsible', 'responsible_score']], how='left',
+                                            on='responsible')
+            self._df_unit['unit_risk_score'] = merged_df['unit_risk_score'] * merged_df['responsible_score']
+        self._df_unit['unit_risk_score'] = windsorize_95_percentile(self.df_unit[['unit_risk_score']].copy())
         self._df_unit['unit_risk_score'] = scaler.fit_transform(self._df_unit[['unit_risk_score']])
 
+    def make_responsible_score(self, restricted_columns):
+        scaler = StandardScaler()
+        columns = [col for col in self._df_resp.columns
+                   if col.startswith('responsible') is False and col not in restricted_columns]
+
+        self._df_resp = self._df_resp.groupby('responsible')[columns].mean()
+        self._df_resp = self._df_resp.reset_index()
+
+        df_resp = self._df_resp[columns].fillna(0)
+        df_resp = pd.DataFrame(scaler.fit_transform(df_resp), columns=columns)
+
+        model = PCA(random_state=42)
+        model.fit(df_resp)
+        self._df_resp['responsible_score'] = model.decision_scores_  # function(df1)
+        scaler = MinMaxScaler(feature_range=(0, 1))
+        self._df_resp['responsible_score'] = scaler.fit_transform(self._df_resp[['responsible_score']])
+
     def save(self):
-        # TODO reduce decimal points to first digit
-        df = self._df_unit[['interview__id', 'responsible', 'unit_risk_score']]#.copy()
+        df = self._df_unit[['interview__id', 'responsible', 'unit_risk_score']]  # .copy()
         df['unit_risk_score'] = df['unit_risk_score'].round(2)
         df.sort_values('unit_risk_score', inplace=True)
         file_name = "_".join([self.config.surveys[0], self.config.survey_version[0], 'unit_risk_score']) + ".csv"
@@ -89,9 +117,9 @@ class UnitDataProcessing(ItemFeatureProcessing):
         data = data.groupby(['responsible', 'variable_name']).agg({score_name: 'mean'})
         data = data.reset_index()
         data = data.groupby('responsible').agg({score_name: 'mean'})
-        self._df_unit[score_name] = self._df_unit['responsible'].map(data[score_name])
+        self._df_resp[score_name] = self._df_resp['responsible'].map(data[score_name])
         # Fill with 0's for missing values
-        self._df_unit[score_name].fillna(0, inplace=True)
+        self._df_resp[score_name].fillna(0, inplace=True)
 
     def make_score_unit__multi_option_question(self, feature_name):
         score_name = self.rename_feature(feature_name)
@@ -100,9 +128,9 @@ class UnitDataProcessing(ItemFeatureProcessing):
         data = data.groupby(['responsible', 'variable_name']).agg({score_name: 'mean'})
         data = data.reset_index()
         data = data.groupby('responsible').agg({score_name: 'mean'})
-        self._df_unit[score_name] = self._df_unit['responsible'].map(data[score_name])
+        self._df_resp[score_name] = self._df_resp['responsible'].map(data[score_name])
         # Fill with 0's for missing values
-        self._df_unit[score_name].fillna(0, inplace=True)
+        self._df_resp[score_name].fillna(0, inplace=True)
 
     def make_score_unit__answer_hour_set(self, feature_name):
         data = self.make_score__answer_hour_set()
@@ -135,9 +163,9 @@ class UnitDataProcessing(ItemFeatureProcessing):
         data = data.groupby(['responsible', 'variable_name']).agg({score_name: 'mean'})
         data = data.reset_index()
         data = data.groupby('responsible')[score_name].mean()
-        self._df_unit[score_name] = self._df_unit['responsible'].map(data)
+        self._df_resp[score_name] = self._df_resp['responsible'].map(data)
         # Fill with 0's for missing values
-        self._df_unit[score_name].fillna(0, inplace=True)
+        self._df_resp[score_name].fillna(0, inplace=True)
 
     def make_score_unit__answer_selected(self, feature_name):
         score_name = self.rename_feature(feature_name)
@@ -194,17 +222,40 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
     def make_score_unit__time_changed(self, feature_name):
         score_name = self.rename_feature(feature_name)
-        # Bin the negative time changed into 4 bins:
-        # Not time changed, less than one hour, 1-5 hours, 5-24 hours, 24+ hours
-
-        bins = [float('-inf'), -24 * 3600, -5 * 3600, -1 * 3600, -0.1, float('inf')]
-        labels = [1, 0.75, 0.5, 0.25, 0]  # Numeric values for each bin
-        self._df_unit[score_name] = pd.cut(self._df_unit['f__time_changed'], bins=bins, labels=labels).astype(float)
+        self._df_unit[score_name] = round(self._df_unit['f__time_changed'].abs())
 
     def make_score_unit__total_duration(self, feature_name):
         score_name = self.rename_feature(feature_name)
         # transform Total duration into 10 minutes values
-        self._df_unit[feature_name] = round(self._df_unit[feature_name] / (3600 / 6)) /self._df_unit['f__number_answered']
+        # self._df_unit[feature_name] = round(self._df_unit[feature_name]/600)
+        self._df_unit[score_name] = round(self._df_unit[feature_name] / 600)  # / self._df_unit['f__number_answered']
+
+        # contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
+        #
+        # model = ECOD(contamination=contamination)
+        # model.fit(self._df_unit[[feature_name]])
+        # self._df_unit[score_name] = model.predict(self._df_unit[[feature_name]])
+        #
+        # score_name1 = score_name + '_lower'
+        # score_name2 = score_name + '_upper'
+        # min_good_value = self._df_unit[(self._df_unit[score_name] == 0)][feature_name].min()
+        # max_good_value = self._df_unit[(self._df_unit[score_name] == 0)][feature_name].max()
+        #
+        # self._df_unit[score_name1] = 0
+        # self._df_unit[score_name2] = 0
+        #
+        # self._df_unit.loc[(self._df_unit[feature_name] < min_good_value), score_name1] = 1
+        # self._df_unit.loc[(self._df_unit[feature_name] > max_good_value), score_name2] = 1
+        #
+        # self._df_unit.drop(columns=[score_name], inplace=True)
+
+    def make_score_unit__days_from_start(self, feature_name):
+        score_name = self.rename_feature(feature_name)
+        self._df_unit[score_name] = (self._df_unit[feature_name] / 7).astype(int)
+
+    def make_score_unit__total_elapse(self, feature_name):
+        score_name = self.rename_feature(feature_name)
+        #self._df_unit[score_name] = round(self._df_unit[feature_name] / 600)
         contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
 
         model = ECOD(contamination=contamination)
@@ -224,84 +275,38 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
         self._df_unit.drop(columns=[score_name], inplace=True)
 
-    def make_score_unit__days_from_start(self, feature_name):
-        score_name = self.rename_feature(feature_name)
-        self._df_unit[score_name] = (self._df_unit[feature_name] / 7).astype(int)
-
-    def make_score_unit__total_elapse(self, feature_name):
-        score_name = self.rename_feature(feature_name)
-        self._df_unit[score_name] = (self._df_unit[feature_name] - self._df_unit[feature_name].mean()) / self._df_unit[
-            feature_name].std()
-
     def make_score_unit__pause_duration(self, feature_name):
+
         score_name = self.rename_feature(feature_name)
-
-        def custom_pause_duration_binning(seconds):
-            if seconds < 3600 * 2:
-                return round(seconds / 600) * 10
-            elif 3600 * 2 <= seconds < 3600 * 5:
-                return round(seconds / 1800) * 30
-            elif 3600 * 5 <= seconds < 3600 * 24:  # 24 hours * 60 minutes/hour
-                return round(seconds / 60) * 60
-            else:
-                return round(seconds / 1440) * 1440
-
-        df = self.get_df_time()
-        duration_mask = ~pd.isnull(df[feature_name])
-        df = df[duration_mask]#.copy()
-
-        df[feature_name] = df[feature_name].astype(float)
-        #df[feature_name] = df[feature_name].apply(custom_pause_duration_binning).astype(float)
-
-        # Create a new column that has the hours mapped to order of frequency
-        sorted_pauses = df[feature_name].value_counts().index
-        hour_to_rank = {hour: rank for rank, hour in enumerate(sorted_pauses)}
-        # Sorting the DataFrame based on the 'frequency' column in descending order
-        df['frequency'] = df[feature_name].map(hour_to_rank)
-        df['frequency'].hist(bins=48)
-
-
-        contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
-        model = ECOD(contamination=contamination)
-
-        model.fit(df[['frequency']])
-
-        df.loc[duration_mask, score_name] = model.predict(df[['frequency']])
-
-        df = df.groupby('interview__id').agg({feature_name: 'mean'})
-        self._df_unit[score_name] = self._df_unit['interview__id'].map(df[feature_name])
-        # Fill with 0's for missing values. It means "No anomalies detected"
-        self._df_unit[score_name].fillna(1, inplace=True)
+        # transform Total duration into 10 minutes values
+        self._df_unit[score_name] = self._df_unit[feature_name]   / self._df_unit['f__total_elapse']
+        # contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
+        #
+        # model = ECOD(contamination=contamination)
+        # model.fit(self._df_unit[[feature_name]])
+        # self._df_unit[score_name] = model.predict(self._df_unit[[feature_name]])
+        #
+        # score_name1 = score_name + '_lower'
+        # score_name2 = score_name + '_upper'
+        # min_good_value = self._df_unit[(self._df_unit[score_name] == 0)][feature_name].min()
+        # max_good_value = self._df_unit[(self._df_unit[score_name] == 0)][feature_name].max()
+        #
+        # self._df_unit[score_name1] = 0
+        # self._df_unit[score_name2] = 0
+        #
+        # self._df_unit.loc[(self._df_unit[feature_name] < min_good_value), score_name1] = 1
+        # self._df_unit.loc[(self._df_unit[feature_name] > max_good_value), score_name2] = 1
+        #
+        # self._df_unit.drop(columns=[score_name], inplace=True)
 
     def make_score_unit__pause_count(self, feature_name):
         score_name = self.rename_feature(feature_name)
         pause_mask = ~pd.isnull(self._df_unit[feature_name])
-
-        contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
-
-        model = ECOD(contamination=contamination)
-        model.fit(self._df_unit[pause_mask][[feature_name]])
-        self._df_unit.loc[pause_mask, score_name] = model.predict(self._df_unit[pause_mask][[feature_name]])
-
-        score_name1 = score_name + '_lower'
-        score_name2 = score_name + '_upper'
-        min_good_value = self._df_unit[(self._df_unit[score_name] == 0) & pause_mask][feature_name].min()
-        max_good_value = self._df_unit[(self._df_unit[score_name] == 0) & pause_mask][feature_name].max()
-
-        self._df_unit[score_name1] = 0
-        self._df_unit[score_name2] = 0
-
-        self._df_unit.loc[(self._df_unit[feature_name] < min_good_value) & pause_mask, score_name1] = 1
-        self._df_unit.loc[(self._df_unit[feature_name] > max_good_value) & pause_mask, score_name2] = 1
-
-        self._df_unit.drop(columns=[score_name], inplace=True)
-        self._df_unit[score_name1].fillna(1, inplace=True)
-        self._df_unit[score_name2].fillna(0, inplace=True)
+        self._df_unit[score_name] = self._df_unit[feature_name] / self._df_unit['f__number_answered']
 
     def make_score_unit__number_answered(self, feature_name):
         score_name = self.rename_feature(feature_name)
-        # self._df_unit[score_name] = (self._df_unit[feature_name] - self._df_unit[feature_name].mean()) / self._df_unit[
-        #     feature_name].std()
+        self._df_unit[score_name] = self._df_unit[feature_name]
 
     def make_score_unit__number_unanswered(self, feature_name):
         score_name = self.rename_feature(feature_name)

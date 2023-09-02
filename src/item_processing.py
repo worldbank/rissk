@@ -37,13 +37,11 @@ class ItemFeatureProcessing(FeatureProcessing):
         return variables
 
     @staticmethod
-    def filter_columns(data, index_col, threshold=0.2):
-        # !TODO TRHESHOLD SHOLUD PROBABLY BE IN ABSOUTE TERMS AS IT WOULD BE AFFECTED
+    def filter_columns(data, index_col, threshold=100):
         drop_columns = []
         keep_columns = []
-        total_interviews = data.interview__id.nunique()
         for col in data.columns:
-            if (data[col].nunique() < 3 or data[col].count() / total_interviews < threshold) and col not in index_col:
+            if (data[col].nunique() < 3 or data[col].count() < threshold) and col not in index_col:
                 drop_columns.append(col)
             else:
                 keep_columns.append(col)
@@ -152,9 +150,10 @@ class ItemFeatureProcessing(FeatureProcessing):
         # Select only those variables that have at least three distinct values and more than one hundred records
         valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
         df[score_name] = 0
+        contamination = self.get_contamination_parameter(feature_name)
         for var in valid_variables:
             mask = (df['variable_name'] == var)
-            model = INNE()
+            model = INNE(contamination=contamination, random_state=42)
             model.fit(df[mask][[feature_name]])
             df.loc[mask, score_name] = model.predict(df[mask][[feature_name]])
         return df
@@ -163,7 +162,7 @@ class ItemFeatureProcessing(FeatureProcessing):
 
         feature_name = 'f__first_decimal'
         score_name = self.rename_feature(feature_name)
-        df = self.df_item[~pd.isnull(self.df_item[feature_name])]#.copy()
+        df = self.df_item[~pd.isnull(self.df_item[feature_name])].copy()
         # Select only those variables that have at least three distinct values and more than one hundred records
         valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
         df[score_name] = 0
