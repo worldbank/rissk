@@ -1,11 +1,7 @@
 # @package _global_
 version_base: 0.01
-data:
-  externals: ../data/externals
-  raw: ../data/raw
-  processed: ../data/processed
-  final: ../data/final
-  results: ../results
+defaults:
+  - environment/notebook_environment
 
 export_path: .
 
@@ -13,10 +9,7 @@ output_file: unit_risk_score.csv
 
 
 surveys: []
-survey_version: all
-reload: false
-extract: true
-save_to_disk: false
+survey_version: null
 
 features:
   answer_hour_set:

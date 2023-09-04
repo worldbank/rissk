@@ -1,0 +1,11 @@
+data:
+  externals: ../data/externals
+  raw: ../data/raw
+  processed: ../data/processed
+  final: ../data/final
+  results: ../results
+
+
+reload: true
+extract: true
+save_to_disk: false

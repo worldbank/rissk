@@ -7,8 +7,8 @@ class FeatureProcessing(ImportManager):
         super().__init__(config)
 
         self.extract()
-        paradata, questionaire, microdata = self.get_dataframes(reload=self.config['reload'],
-                                                                save_to_disk=self.config['save_to_disk'])
+        paradata, questionaire, microdata = self.get_dataframes(reload=self.config['environment']['reload'],
+                                                                save_to_disk=self.config['environment']['save_to_disk'])
         print('Data Loaded')
         self._allowed_features = ['f__' + k for k, v in config['features'].items() if v['use']]
         self.item_level_columns = ['interview__id', 'variable_name', 'roster_level']
@@ -87,14 +87,14 @@ class FeatureProcessing(ImportManager):
 
     @property
     def df_microdata(self):
-        paradata, questionaire, microdata = self.get_dataframes(reload=self.config['reload'],
-                                                                save_to_disk=self.config['save_to_disk'])
+        paradata, questionaire, microdata = self.get_dataframes(reload=self.config['environment']['reload'],
+                                                                save_to_disk=self.config['environment']['save_to_disk'])
         return microdata
 
     @property
     def df_questionaire(self):
-        paradata, questionaire, microdata = self.get_dataframes(reload=self.config['reload'],
-                                                                save_to_disk=self.config['save_to_disk'])
+        paradata, questionaire, microdata = self.get_dataframes(reload=self.config['environment']['reload'],
+                                                                save_to_disk=self.config['environment']['save_to_disk'])
         return questionaire
 
     def make_index_col(self, df):
@@ -274,7 +274,7 @@ class FeatureProcessing(ImportManager):
 
     def save_data(self, df, file_name):
 
-        target_dir = os.path.join(self.config.data.raw, self.config.surveys)
+        target_dir = os.path.join(self.config['environment']['data']['raw'], self.config.surveys)
         survey_path = os.path.join(target_dir, self.config.survey_version)
         processed_data_path = os.path.join(survey_path, 'processed_data')
         df.to_pickle(os.path.join(processed_data_path, f'{file_name}.pkl'))

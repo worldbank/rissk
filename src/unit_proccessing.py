@@ -36,14 +36,14 @@ class UnitDataProcessing(ItemFeatureProcessing):
     def df_unit_score(self):
         for method_name in self.get_make_methods(method_type='score', level='unit'):
             feature_name = method_name.replace('make_score_unit__', 'f__')
-
+            score_name = self.rename_feature(feature_name)
             if feature_name in self._allowed_features and self._score_columns is None:
                 try:
-                    print('Processing Score {}...'.format(feature_name))
+                    print('Processing Score {}...'.format(score_name))
                     getattr(self, method_name)(feature_name)
                     # print('Score{} Processed'.format(feature_name))
                 except Exception as e:
-                    print("WARNING: SCORE: {} won't be used in further calculation".format(feature_name))
+                    print("WARNING: SCORE: {} won't be used in further calculation".format(score_name))
 
         score_columns = [col for col in self._df_unit if
                          col.startswith('s__')]  # and col.replace('s__','f__') in  self._allowed_features]
@@ -100,7 +100,7 @@ class UnitDataProcessing(ItemFeatureProcessing):
         df['unit_risk_score'] = df['unit_risk_score'].round(2)
         df.sort_values('unit_risk_score', inplace=True)
         file_name = "_".join([self.config.surveys[0], self.config.survey_version[0], 'unit_risk_score']) + ".csv"
-        output_path = self.config.output_file.split('.')[0] + '.csv'
+        output_path = self.config['output_file'].split('.')[0] + '.csv'
         df.to_csv(output_path, index=False)
         print(f'SUCCESS! you can find the unit_risk_score output file in {output_path}')
 
