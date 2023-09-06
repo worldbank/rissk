@@ -104,10 +104,17 @@ class UnitDataProcessing(ItemFeatureProcessing):
         df.to_csv(output_path, index=False)
         print(f'SUCCESS! you can find the unit risk score output file in {output_path}')
         if self.config['feature_score']:
-            sorted_columns = sorted(self._score_columns)
-            df = self._df_unit[['interview__id', 'responsible', 'survey_name', 'survey_version'] + sorted_columns]
+
+            columns = [col for col in self._df_resp.columns if col.startswith('responsible') is False]
+
+            sorted_columns = sorted(self._score_columns + columns)
+
+            merged_df = self._df_unit.merge(self._df_resp, how='left',
+                                            on='responsible')
+
+            merged_df = merged_df[['interview__id', 'responsible', 'survey_name', 'survey_version'] + sorted_columns]
             output_path = self.config['output_file'].split('.')[0] + '_feature_score.csv'
-            df.to_csv(output_path, index=False)
+            merged_df.to_csv(output_path, index=False)
             print(f'You can find the unit feature score file in {output_path}')
 
     def make_score_unit__numeric_response(self, feature_name):
