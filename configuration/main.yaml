@@ -6,7 +6,7 @@ defaults:
 export_path: .
 
 output_file: unit_risk_score.csv
-
+feature_score: false
 
 surveys: []
 survey_version: null
