@@ -81,9 +81,9 @@ class ItemFeatureProcessing(FeatureProcessing):
         data.columns = replace_with_feature_name(list(data.columns), feature_name)
         data = data.reset_index()
         # Everything that has 0,0 as coordinates is an outlier
-        data['s__gps_spatial_extreme_outlier'] = 0
-        data['s__gps_spatial_extreme_outlier'] = data['f__gps_latitude'].apply(lambda x: 1 if x == 0.000000 else 0)
-        data['s__gps_spatial_extreme_outlier'] = data['f__gps_longitude'].apply(lambda x: 1 if x == 0.000000 else 0)
+        data['s__gps_extreme_outlier'] = 0
+        data['s__gps_extreme_outlier'] = data['f__gps_latitude'].apply(lambda x: 1 if x == 0.000000 else 0)
+        data['s__gps_extreme_outlier'] = data['f__gps_longitude'].apply(lambda x: 1 if x == 0.000000 else 0)
 
 
         # Convert lat, lon to 3D cartesian coordinates
@@ -107,7 +107,7 @@ class ItemFeatureProcessing(FeatureProcessing):
         coords_columns = ['x', 'y']
         # Identify extreme spatial outliers
 
-        mask = (data['s__gps_spatial_extreme_outlier'] < 1)
+        mask = (data['s__gps_extreme_outlier'] < 1)
 
         median_x = data[mask].drop_duplicates(subset='x')['x'].median()
         median_y = data[mask].drop_duplicates(subset='y')['y'].median()
@@ -122,15 +122,15 @@ class ItemFeatureProcessing(FeatureProcessing):
         # Set a threshold (e.g., 95th percentile of distances)
         # Everything that is above 30 + the median distance is an outlier
         threshold = data[mask]['distance_to_median'].quantile(0.95) + 30
-        data.loc[mask, 's__gps_spatial_extreme_outlier'] = data[mask]['distance_to_median'] > threshold
+        data.loc[mask, 's__gps_extreme_outlier'] = data[mask]['distance_to_median'] > threshold
 
         # # Make a further cleaning with dbscan
         # coords_columns = ['x', 'y']
         # model = DBSCAN(eps=0.5, min_samples=5)
         # model.fit(data[mask][coords_columns])
         # data.loc[mask, 'outlier'] = model.fit_predict(data[mask][coords_columns])
-        # data['s__gps_spatial_extreme_outlier'] = data.apply(
-        #     lambda row: 1 if row['outlier'] == -1 or row['s__gps_spatial_extreme_outlier'] == 1 else 0, 1)
+        # data['s__gps_extreme_outlier'] = data.apply(
+        #     lambda row: 1 if row['outlier'] == -1 or row['s__gps_extreme_outlier'] == 1 else 0, 1)
 
         # USE COF if dataset hase less than 20000 samples else use LOF
         contamination = self.get_contamination_parameter('f__gps', method='medfilt', random_state=42)
@@ -139,7 +139,7 @@ class ItemFeatureProcessing(FeatureProcessing):
         else:
             model = LOF(contamination=contamination, n_neighbors=20)
         model.fit(data[mask][coords_columns])
-        data.loc[mask, 's__gps_spatial_outlier'] = model.predict(data[mask][coords_columns])
+        data.loc[mask, 's__gps_outlier'] = model.predict(data[mask][coords_columns])
 
         return data.drop(columns=['x', 'y', 'z', 'accuracy', 'distance_to_median', 'outlier'], errors='ignore')
 
