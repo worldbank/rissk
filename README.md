@@ -36,7 +36,7 @@ python -m venv venv
 ```
 
 > [!WARNING]
-> If above line returns an error try writing `python3` instead of `python`.
+> If above line returns an error try writing `python3` instead of `python`.  
 
 5. **Activate the virtual environment**: The activation command varies based on your operating system.
 
@@ -92,7 +92,7 @@ To activate this option, execute the following:
 python main.py export_path=<export_path> output_file=<output_file> feature_score=true
 ```
 
-When this parameter is specified, RISSK will generate an additional CSV file alongside the main `output_file`. This file, bearing the suffix `_feature_score.csv`, contains the detailed feature scores for each interview.
+When this parameter is specified, RISSK will generate an additional CSV file alongside the main `output_file` with the suffix `_feature_score.csv`. It contains the detailed feature scores for each interview. For guidance on how to interpret each feature score, refer to [FEATURES_SCORES.md](FEATURES_SCORES.md). 
 
 
 ## Excluding features
@@ -326,7 +326,7 @@ This chapter outlines the key steps that the RISSK package follows to generate t
     - Type 3 Scores are aggregated using [Principal Component Analysis](https://en.wikipedia.org/wiki/Principal_component_analysis) (PCA), which is well-suited for the distribution of Type 3 Scores. 
     - Type 1 and 2 Scores are aggregated using [Isolation Forest](https://en.wikipedia.org/wiki/Isolation_forest) Due to the multiple distinct types of distributions present in Type 1 and 2 Scores, Isolation Forest was preferred over PCA.
     - Results from the PCA and Isolation Forest are combined by a normalized product.
-    - This product is then [windsorized](https://en.wikipedia.org/wiki/Winsorizing) to mitigate the impact of extreme outliers. 
+    - This product is then [winsorized](https://en.wikipedia.org/wiki/Winsorizing) to mitigate the impact of extreme outliers. 
     - Finally, the windsorized product is [rescaled](https://en.wikipedia.org/wiki/Feature_scaling#Rescaling_(min-max_normalization) to a range of 0-100, rendering the resulting `unit_risk_score` easy to interpret.
 
 # Roadmap
