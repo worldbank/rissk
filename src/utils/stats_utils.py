@@ -18,7 +18,7 @@ def jensen_shannon_distance(p, q):
     return np.sqrt(jensen_shannon_divergence(p, q))
 
 
-def get_digit_frequecies(df, feature_name, apply_first_digit, minimum_sampe=50):
+def get_digit_frequecies(df, feature_name, apply_first_digit, minimum_sample=50):
     digit_mask = (df[feature_name] != 0)
     if apply_first_digit:
         total_digit_values = df[digit_mask][feature_name].apply(first_digit)
@@ -26,11 +26,11 @@ def get_digit_frequecies(df, feature_name, apply_first_digit, minimum_sampe=50):
         total_digit_values = df[digit_mask][feature_name].apply(last_digit)
     total_digit_count = Counter(total_digit_values)
     total_digit_count = [total_digit_count.get(i, 0) for i in range(1, 10)]
-    if sum(total_digit_count) < minimum_sampe:
+    if sum(total_digit_count) < minimum_sample:
         total_digit_freq = None
     else:
         total_digit_freq = [v / sum(total_digit_count) for v in total_digit_count]
-    # DO not consider samples with size less than minimum_sampe
+    # DO not consider samples with size less than minimum_sample
 
     return total_digit_freq
 
@@ -46,7 +46,7 @@ def last_digit(val):
     return int(str(int(val))[-1])
 
 
-def apply_benford_tests(df, valid_variables, responsible_col, feature_name, apply_first_digit=True, minimum_sampe=50):
+def apply_benford_tests(df, valid_variables, responsible_col, feature_name, apply_first_digit=True, minimum_sample=50):
     responsible_list = df[responsible_col].unique()
     results = []
     for var in valid_variables:
@@ -55,9 +55,9 @@ def apply_benford_tests(df, valid_variables, responsible_col, feature_name, appl
             score = None
             resp_mask = (df[responsible_col] == resp)
             total_digit_count = get_digit_frequecies(df[variable_mask & (~resp_mask)], feature_name, apply_first_digit,
-                                                     minimum_sampe=minimum_sampe)
+                                                     minimum_sample=minimum_sample)
             resp_digit_count = get_digit_frequecies(df[variable_mask & resp_mask], feature_name, apply_first_digit,
-                                                    minimum_sampe=minimum_sampe)
+                                                    minimum_sample=minimum_sample)
             if resp_digit_count is not None and total_digit_count is not None:
                 # _, p_value = chisquare(total_digit_count, resp_digit_count)
                 # score = p_value < 0.05

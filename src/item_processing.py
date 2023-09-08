@@ -20,7 +20,7 @@ class ItemFeatureProcessing(FeatureProcessing):
     def get_contamination_parameter(self, feature_name, method='medfilt', random_state=42):
         f_name = feature_name.replace('f__', '')
         contamination = self.config.features.get(f_name, {}).get('parameters', {}).get('contamination')
-        if contamination is None or contamination=='auto':
+        if contamination is None or contamination == 'auto' or self.config.automatic_contamination is True:
             return FILTER(method=method, random_state=random_state)
         else:
             return contamination
@@ -202,9 +202,8 @@ class ItemFeatureProcessing(FeatureProcessing):
         feature_name = 'f__answer_changed'
         score_name = self.rename_feature(feature_name)
         df = self.df_item[~pd.isnull(self.df_item[feature_name])]#.copy()
-
-        # Select only those variables that have at least three distinct values and more than one hundred records
-        valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
+        # Select only those variables that have at least 1 distinct values and more than one hundred records
+        valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=1)
         df[score_name] = 0
         contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
         for var in valid_variables:
@@ -219,9 +218,8 @@ class ItemFeatureProcessing(FeatureProcessing):
         feature_name = 'f__answer_removed'
         score_name = self.rename_feature(feature_name)
         df = self.get_feature_item__answer_removed(feature_name)
-
-        # Select only those variables that have at least three distinct values and more than one hundred records
-        valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=3)
+        # Select only those variables that have at least 1 distinct values and more than one hundred records
+        valid_variables = self.filter_variable_name_by_frequency(df, feature_name, frequency=100, min_unique_values=1)
         df[score_name] = 0
         contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
         for var in valid_variables:
@@ -277,7 +275,6 @@ class ItemFeatureProcessing(FeatureProcessing):
             score_name2 = score_name + '_upper'
 
             df.loc[mask, score_name] = model.predict(df[mask][[feature_name]])
-
             min_good_value = df[(df[score_name] == 0) & mask][feature_name].min()
             max_good_value = df[(df[score_name] == 0) & mask][feature_name].max()
 
@@ -329,11 +326,11 @@ class ItemFeatureProcessing(FeatureProcessing):
         score_name = self.rename_feature(feature_name)
 
         single_question_mask = ((self.df_item['type'] == 'SingleQuestion')
-                                & (self.df_item['n_answers'] > 2)
+                                & (self.df_item['n_answers'] > 1)
                                 & (self.df_item['is_filtered_combobox'] == False)
                                 & (pd.isnull(self.df_item['cascade_from_question_id'])))
 
-        df = self.df_item[single_question_mask]#.copy()
+        df = self.df_item[single_question_mask].copy()
         # Select only those variables that have at least three distinct values and more than one hundred records
 
         variables = self.filter_variable_name_by_frequency(df, 'value', frequency=100, min_unique_values=3)
@@ -411,23 +408,26 @@ class ItemFeatureProcessing(FeatureProcessing):
         # who have at least 50 records.
         # Once it is calculated, values that diverge from more than 50% from the median value get marked as "anomalus."
         benford_jensen_df = apply_benford_tests(df, valid_variables, 'responsible', feature_name,
-                                                apply_first_digit=True, minimum_sampe=50)
+                                                apply_first_digit=True, minimum_sample=50)
 
         df[score_name] = 0
         variable_list = benford_jensen_df['variable_name'].unique()
         for var in variable_list:
 
             bj_mask = (benford_jensen_df['variable_name'] == var) & (~pd.isnull(benford_jensen_df[feature_name]))
-            bj_df = benford_jensen_df[bj_mask]
+            bj_df = benford_jensen_df[bj_mask].copy()
             if bj_df.shape[0] > 0:
                 bj_df.sort_values(feature_name, inplace=True, ascending=True)
 
                 median_value = bj_df[feature_name].median()
-                df.loc[df['variable_name'] == var, score_name]  = bj_df[feature_name].apply(
+                # If the distribution has a jensen difference grater than 50%
+                # from the median value, mark it as "anomalus"
+                bj_df[score_name] = bj_df[feature_name].apply(
                     lambda x: 1 if x > median_value + 50 / 100 * median_value else 0)
-                #
-                # df.loc[df['variable_name'] == var, score_name] = df[df['variable_name'] == var]['responsible'].map(
-                #     bj_df.set_index('responsible')[score_name])
+
+
+                mask = (df['variable_name'] == var)
+                df.loc[mask, score_name] = df[mask]['responsible'].map(bj_df.set_index('responsible')[score_name])
         return df
 
     # def make_score__last_digit(self):

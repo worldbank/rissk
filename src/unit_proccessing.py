@@ -1,6 +1,7 @@
 from src.item_processing import *
 from src.detection_algorithms import *
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, Normalizer
+from sklearn.preprocessing import normalize
 # from sklearn.decomposition import PCA
 from pyod.models.pca import PCA
 from pyod.models.iforest import IForest
@@ -66,17 +67,19 @@ class UnitDataProcessing(ItemFeatureProcessing):
         scaler = MinMaxScaler(feature_range=(0, 100))
         self._df_unit['unit_risk_score'] = model.decision_scores_
 
+        self._df_unit['unit_risk_score'] = windsorize_95_percentile(self.df_unit[['unit_risk_score']].copy())
+
+        self._df_unit['unit_risk_score'] = scaler.fit_transform(self._df_unit[['unit_risk_score']])
+
         # Merge unit score with responsible score
         if combine_resp_score:
             # Make responsible Score
-            self._df_unit['unit_risk_score'] = scaler.fit_transform(self._df_unit[['unit_risk_score']])
-
             self.make_responsible_score(restricted_columns=columns)
             merged_df = self._df_unit.merge(self._df_resp[['responsible', 'responsible_score']], how='left',
                                             on='responsible')
             self._df_unit['unit_risk_score'] = merged_df['unit_risk_score'] * merged_df['responsible_score']
-        self._df_unit['unit_risk_score'] = windsorize_95_percentile(self.df_unit[['unit_risk_score']].copy())
-        self._df_unit['unit_risk_score'] = scaler.fit_transform(self._df_unit[['unit_risk_score']])
+
+            self._df_unit['unit_risk_score'] = scaler.fit_transform(self._df_unit[['unit_risk_score']])
 
     def make_responsible_score(self, restricted_columns):
         scaler = StandardScaler()
@@ -87,13 +90,16 @@ class UnitDataProcessing(ItemFeatureProcessing):
         self._df_resp = self._df_resp.reset_index()
 
         df_resp = self._df_resp[columns].fillna(0)
-        df_resp = pd.DataFrame(scaler.fit_transform(df_resp), columns=columns)
+        # Remove columns with constant values
+        df_resp = df_resp.loc[:, df_resp.nunique() != 1]
+        df_resp = pd.DataFrame(scaler.fit_transform(df_resp), columns=df_resp.columns)
 
         model = PCA(random_state=42)
         model.fit(df_resp)
         self._df_resp['responsible_score'] = model.decision_scores_  # function(df1)
-        scaler = MinMaxScaler(feature_range=(0, 1))
-        self._df_resp['responsible_score'] = scaler.fit_transform(self._df_resp[['responsible_score']])
+        # scaler = MinMaxScaler(feature_range=(0, 1))
+        # self._df_resp['responsible_score'] = scaler.fit_transform(self._df_resp[['responsible_score']])
+        self._df_resp['responsible_score'] = normalize(self._df_resp[['responsible_score']], norm='l1', axis=0)
 
     def save(self):
         df = self._df_unit[['interview__id', 'responsible', 'unit_risk_score']]  # .copy()
@@ -218,11 +224,11 @@ class UnitDataProcessing(ItemFeatureProcessing):
     def make_score_unit__first_digit(self, feature_name):
         score_name = self.rename_feature(feature_name)
         data = self.make_score__first_digit()
-        data = data.groupby(['interview__id']).agg({score_name: 'mean'})
+        data = data.groupby(['responsible']).agg({score_name: 'mean'})
 
-        self._df_unit[score_name] = self._df_unit['interview__id'].map(data[score_name])
-        # Fill with 0's for missing values. It means "No anomalies detected"
-        self._df_unit[score_name].fillna(0, inplace=True)
+        self._df_resp[score_name] = self._df_resp['responsible'].map(data[score_name])
+        # Fill with 0's for missing values
+        self._df_resp[score_name].fillna(0, inplace=True)
 
     def make_score_unit__sequence_jump(self, feature_name):
         score_name = feature_name.replace('f__', 's__')
@@ -240,27 +246,7 @@ class UnitDataProcessing(ItemFeatureProcessing):
     def make_score_unit__total_duration(self, feature_name):
         score_name = self.rename_feature(feature_name)
         # transform Total duration into 10 minutes values
-        # self._df_unit[feature_name] = round(self._df_unit[feature_name]/600)
-        self._df_unit[score_name] = round(self._df_unit[feature_name] / 600)  # / self._df_unit['f__number_answered']
-
-        # contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
-        #
-        # model = ECOD(contamination=contamination)
-        # model.fit(self._df_unit[[feature_name]])
-        # self._df_unit[score_name] = model.predict(self._df_unit[[feature_name]])
-        #
-        # score_name1 = score_name + '_lower'
-        # score_name2 = score_name + '_upper'
-        # min_good_value = self._df_unit[(self._df_unit[score_name] == 0)][feature_name].min()
-        # max_good_value = self._df_unit[(self._df_unit[score_name] == 0)][feature_name].max()
-        #
-        # self._df_unit[score_name1] = 0
-        # self._df_unit[score_name2] = 0
-        #
-        # self._df_unit.loc[(self._df_unit[feature_name] < min_good_value), score_name1] = 1
-        # self._df_unit.loc[(self._df_unit[feature_name] > max_good_value), score_name2] = 1
-        #
-        # self._df_unit.drop(columns=[score_name], inplace=True)
+        self._df_unit[score_name] = round(self._df_unit[feature_name] / 300)  # / self._df_unit['f__number_answered']
 
     def make_score_unit__days_from_start(self, feature_name):
         score_name = self.rename_feature(feature_name)
@@ -268,7 +254,7 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
     def make_score_unit__total_elapse(self, feature_name):
         score_name = self.rename_feature(feature_name)
-        #self._df_unit[score_name] = round(self._df_unit[feature_name] / 600)
+        self._df_unit[feature_name] = round(self._df_unit[feature_name] / 300)
         contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
 
         model = ECOD(contamination=contamination)
@@ -292,25 +278,7 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
         score_name = self.rename_feature(feature_name)
         # transform Total duration into 10 minutes values
-        self._df_unit[score_name] = self._df_unit[feature_name]   / self._df_unit['f__total_elapse']
-        # contamination = self.get_contamination_parameter(feature_name, method='medfilt', random_state=42)
-        #
-        # model = ECOD(contamination=contamination)
-        # model.fit(self._df_unit[[feature_name]])
-        # self._df_unit[score_name] = model.predict(self._df_unit[[feature_name]])
-        #
-        # score_name1 = score_name + '_lower'
-        # score_name2 = score_name + '_upper'
-        # min_good_value = self._df_unit[(self._df_unit[score_name] == 0)][feature_name].min()
-        # max_good_value = self._df_unit[(self._df_unit[score_name] == 0)][feature_name].max()
-        #
-        # self._df_unit[score_name1] = 0
-        # self._df_unit[score_name2] = 0
-        #
-        # self._df_unit.loc[(self._df_unit[feature_name] < min_good_value), score_name1] = 1
-        # self._df_unit.loc[(self._df_unit[feature_name] > max_good_value), score_name2] = 1
-        #
-        # self._df_unit.drop(columns=[score_name], inplace=True)
+        self._df_unit[score_name] = self._df_unit[feature_name] / self._df_unit['f__total_elapse']
 
     def make_score_unit__pause_count(self, feature_name):
         score_name = self.rename_feature(feature_name)
