@@ -11,6 +11,7 @@ feature_score: false
 surveys: []
 survey_version: null
 
+automatic_contamination: false
 features:
   answer_hour_set:
     use: true
@@ -24,8 +25,6 @@ features:
     use: true
     parameters:
       contamination: 0.1
-  answer_position:
-    use: true
   answer_selected:
     use: true
     parameters:
@@ -81,13 +80,15 @@ features:
   total_elapse:
     use: true
     parameters:
-      contamination: 0.1
+      contamination: 0.11
   single_question:
-    use: false
+    use: true
   multi_option_question:
       use: true
   days_from_start:
     use: false
+  answer_position:
+      use: false
   comment_length:
     use: false
   comment_set:
