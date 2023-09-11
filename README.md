@@ -239,7 +239,7 @@ To use the URS as a monitoring indicator, average `unit_risk_score` by interview
 
 To rigorously test the RISSK package's effectiveness in identifying high-risk interviews, we conducted an experiment using both real and artificially created "fake" interviews. These fake interviews were designed to mimic various types of problematic interviewer behavior.
 
-**Methodology**
+## Methodology
 
 We utilized a real CATI survey dataset (specific details are confidential). To this, we added 77 artificial fake interviews created by 11 interviewers just after completion of fieldwork, each following one of seven scenarios designed to induce different types of interviewer behavior. Here are the scenarios:
 
@@ -254,8 +254,6 @@ We utilized a real CATI survey dataset (specific details are confidential). To t
 These artificial fake interviews were then mixed with 268 real interviews, creating a test set of 345 interviews. Real interviews for this survey are believed to be of general low-risk, as they were conducted by a small team of interviewers with a trusted, long-term relationship, incentives to perform well and deterrents to do badly, as well as a good data monitoring structure in place. Furthermore, interviewers were aware that the data they collected would be used to validate secondary data and that discrepancies would be investigated. Nevertheless, it could not be ruled out that some real interviews contained problematic interviewer behaviour. 
 
 ## Metrics
-
-When using `unit_risk_score` to cluster interviews into real and fake, we achieve a [recall](https://en.wikipedia.org/wiki/Precision_and_recall)/[sensitivity](https://en.wikipedia.org/wiki/Sensitivity_and_specificity) of 61%, meaning that 61% of the artificial fake interviews were correctly classified. 
 
 To measure RISSK's utility in a practical survey setting, we sorted all interviews by `unit_risk_score`, select the top _N%_ - as would be done if using the URS to prioritize interviews for review/verification - and calculate the share of artificial fake interviews `share_urs`. We compare this to `share_rand`, the share of artificial fakes one would obtain if selecting _N%_ at random, which is equal to the prevalence of artificial fakes in the data. We also calculate the ratio of `share_urs/share_rand` measuring how many more artificial fake interviews are contained in the selection guided by URS vs a random selection.  
 
@@ -327,7 +325,7 @@ This chapter outlines the key steps that the RISSK package follows to generate t
     - Type 1 and 2 Scores are aggregated using [Isolation Forest](https://en.wikipedia.org/wiki/Isolation_forest) Due to the multiple distinct types of distributions present in Type 1 and 2 Scores, Isolation Forest was preferred over PCA.
     - Results from the PCA and Isolation Forest are combined by a normalized product.
     - This product is then [winsorized](https://en.wikipedia.org/wiki/Winsorizing) to mitigate the impact of extreme outliers. 
-    - Finally, the windsorized product is [rescaled](https://en.wikipedia.org/wiki/Feature_scaling#Rescaling_(min-max_normalization) to a range of 0-100, rendering the resulting `unit_risk_score` easy to interpret.
+    - Finally, the windsorized product is [rescaled](https://en.wikipedia.org/wiki/Feature_scaling#Rescaling_(min-max_normalization)) to a range of 0-100, rendering the resulting `unit_risk_score` easy to interpret.
 
 # Roadmap
 We have planned a series of enhancements and additions to RISSK, which are maintained as [issues](https://github.com/worldbank/rissk/issues). They can be categorized into the following broad areas:

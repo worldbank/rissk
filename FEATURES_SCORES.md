@@ -38,7 +38,7 @@ This feature highlights interviews with an atypical number of modifications to q
 
 **Score**
 
-Type 1 Score. Anomalies within `f__answer_changed` are detected using [ECOD](https://arxiv.org/pdf/2201.00382.pdf), an efficient, non-parametric algorithm that leverages cumulative distribution functions. The contamination level is determined automatically by default, but it can also be [set manually](README.md#Advanced-Use) if required. <!-- is below correct?--> Anomalies are detected on the question level (`variable_name`) to reduce disaggregation. Each question is considered to have an anomaly if an anomaly was detected for the question on any `roster_level`. 
+Type 1 Score. Anomalies within `f__answer_changed` are detected using [ECOD](https://arxiv.org/pdf/2201.00382.pdf), an efficient, non-parametric algorithm that leverages cumulative distribution functions. The contamination level is determined automatically by default, but it can also be [set manually](README.md#Advanced-Use) if required. <!-- is below correct?, no, checkeing for anomalis without roster level, but aggregating on ratio of items with anomalies --> Anomalies are detected on the question level (`variable_name`) to reduce disaggregation. Each question is considered to have an anomaly if an anomaly was detected for the question on any `roster_level`. 
 
 `s__answer_changed` is the share of questions answered <!--answers or question?? --> with anomalies in `f__answer_changed` per interview. The value ranges from 0 (no anomalies) to 1 (hypothetical, only anomalies). An anomaly is an unusual high (or low) frequency of changes to the answer of a question. E.g., if it is commonplace for a member list question to be changed 0-2 times, these changes won't be classified as anomalies. However, the question may be deemed anomalous if it has been changed 5 times. 
 
@@ -52,39 +52,30 @@ This feature captures atypical frequencies of answer removals.
 
 **Score**
 
-Type 1 Score. Anomalies in `f__answer_removed` are detected using [ECOD](https://arxiv.org/pdf/2201.00382.pdf), an efficient, non-parametric algorithm that leverages cumulative distribution functions. The contamination level is determined automatically by default, but it can also be [set manually](README.md#Advanced-Use) if required. <!-- Below still the case --> Anomalies are detected on the question level (`variable_name`) to reduce disaggregation. Each question is considered to have an anomaly if an anomaly was detected for the question on any `roster_level`. 
+Type 1 Score. Anomalies in `f__answer_removed` are detected using [ECOD](https://arxiv.org/pdf/2201.00382.pdf), an efficient, non-parametric algorithm that leverages cumulative distribution functions. The contamination level is determined automatically by default, but it can also be [set manually](README.md#Advanced-Use) if required. <!-- Below still the case, as answers changed --> Anomalies are detected on the question level (`variable_name`) to reduce disaggregation. Each question is considered to have an anomaly if an anomaly was detected for the question on any `roster_level`. 
 
 `s__answer_removed` is the share of questions in an interview that show anomalies in `f__answer_removed`. The score's range is from 0 (indicating no anomalies) to 1 (a theoretical scenario denoting only anomalies). An anomaly refers to an unusually high or low frequency of answer removals for a question. 
 
-## answer_position
+## single_question
 
-Captures if answer selected for an interviewer
+call it single_question 
+
+This feature identifies the tendency to repeatedly select the same answer options in single-select questions.
+
 **Feature**
 
-`f__answer_position` is constructed on the item level for all answered questions of type `SingleQuestion` in the microdata with fixed answer options (question is not linked), more than 2 answer options, and are not of type Combobox. It contains the relative position of the selected answer, ranging from 0 (answer on top was selected) to 1 (answer on bottom selected), in intervals of 1/N answer options available. 
+`f__single_question` is constructed on the item level for all questions of type `SingleQuestion` in the microdata with fixed answer options (question is not linked), 2 or more answer options, and which are not of the Combobox type. The feature indicates the relative position of the chosen answer: a value of 0 means the top answer was selected, and a value of 1 means the bottom-most answer was selected. The feature is scaled in intervals of 1/N, where N is the total number of answer options available.
+
+<!-- is this still using position or actual values? -->
 
 **Score**
 
-<!-- given how the score is done, we should remove some of the filters in feature construction, can even include linked ones -->
+Type 3 Score. `s__single_question` represents the proportion of questions for a given interviewer where there's a noticeable pattern in selecting similar or identical answer options compared to other interviewers. The score is derived by:
 
-Type 3 Score. 
-average
-
-entropy calculates how predictibale is a
-
-0 entory distribution is highly predictable, means always selects the same values/ answer positions
-1 means not predictable, selects often different values 
-
-done at responsible level. if they select the same position. by variable and by responsible, mark as anomalous all those responsibales who have entropy lower than 50% of the median of all other reposnisbles. binary score for each variable name, 
-
-only over those for which it was possible to calcultae the entropy (only for those responsible and vars with min of 5 records )
-
-1. Calculate the entropy for each variable_name per responsible, i.e., one entropy value for each responsible and variable_name.
-2. Entropy is calculated only for those varible_name of each responsible that have at least 10 times the number of possible values of the variable_name
-3. Mark as "anomalous" any entropy value that is lower than the 50% of the median entropy value
-4. Plot the entropy value for each variable name by responsible and colour in red those values that have very low entropy
-
-number of vars with anomalies, over all variables that 
+- Identifying those `variable_name` for each interviewer with observations exceeding five times the number of available answer options.
+- Computing the entropy for these `variable_name` for each interviewer, capturing the diversity in their answers.
+- Designating a `variable_name` as anomalous for an interviewer if its entropy is less than half the median entropy value compared to other interviewers.
+- Calculating the share of anomalous variables over all variables for which entropy was assessed.
 
 ## answers_selected
 
@@ -112,24 +103,24 @@ andreas check notebook
 
 ## answer_duration
 
+This feature highlights anomalous durations, either too short or too long, for individual questions.
+
 **Feature**
 
-`f__answer_duration` is constructed on the item level using active interviewing events in the paradata. It contains the total duration in seconds of events of type `AnswerSet` and `AnswerRemoved` associated with an item. It is built as follows:
+`f__answer_duration` is constructed at the item level using active interviewing events from the paradata. It represents the total duration, in seconds, for events of type `AnswerSet` and `AnswerRemoved` linked to an item. It is constructed by:
 
-- Only active interviewing events are kept. This removes events generated by Survey Solutions and events that cannot be attributed to an item. 
-- For every event, the time interval to the previous event (by column `order`) is calculated. 
-- Negative time intervals are set to nan. They cannot be real durations and or often caused by interviewers changing the tablet time. 
-- All time intervals for events  `AnswerSet` and `AnswerRemoved` are summed for the item. 
+- Keeping only active interviewing events. This removes events generated by Survey Solutions and events that cannot be attributed to an item. 
+- For every event, computing the time interval to its preceding event (sorted by column `order`). 
+- Assign a value of NaN (Not a Number) to negative time intervals, which are unrealistic durations often resulting from interviewers altering the tablet's time settings.
+- Sum all time intervals for `AnswerSet` and `AnswerRemoved` events related to the item. 
 
-Please note that `f__answer_duration` can only be an approximation of the actual time it took to answer an item. Due to the open navigation architecture of Survey Solutions, it is impossible to determine when a question was started/put into focus or ended/put out of focus. This is approximated with the timestamp of the previous event and the answer being set. Interviewers may do other things between these events without any active event being logged, e.g., confirm the response to the previous question. Likewise, short pauses logged while answering a question (e.g. when switching to the calculator app) are not attributed towards an item.
+It's important to understand that `f__answer_duration` is an approximation of the actual time taken to answer an item. The open navigation design of Survey Solutions makes it challenging to pinpoint when a question is activated or deactivated. This is approximated using the timestamp of the preceding event and the time the answer is set. During these intervals, interviewers might undertake other tasks without logging any active event, like confirming the response to a prior question. Similarly, brief pauses recorded while administering a question (e.g., when accessing a calculator app) aren't allocated to a particular item.
 
 **Score**
 
-For each `variable_name`, anomalies are detected separately on the lower and upper end using ...
+Type 1 Score. First, anomalies in `f__answer_duration` are identified using [ECOD](https://arxiv.org/pdf/2201.00382.pdf), an efficient, non-parametric algorithm that leverages cumulative distribution functions. Anomalies are detected on the item-level by `variable_name` <!-- also by interviewer? -->.
 
-The scores `s__answer_duration_lower` and `s__answer_duration_upper` are calculated as the share of all items set with lower or upper bound anomalies respectively.
-
-<!-- @Gabriele, count on item level or is this this funky question_level thing again -->
+Subsequently, two scores, `s__answer_duration_lower` and `s__answer_duration_upper` are computed. They represent the share of items in an interview with anomalies at the lower or upper bounds respectively. Lower and upper end anomalies are treated separately as they indicate different potential undesired behaviours. Lower end anomalies point at interviewers rushing or fabricating data, upper end at interviewer struggling (or interview/respondent effects). 
 
 ## first_decimal
 
@@ -225,110 +216,106 @@ Time changes are due to tablet time being reset, usually purposefully by the int
 
 ## gps
 
-Detects anomalies in the location where GPS type questions were answered. 
-
-[@Gabriele]: <> (Do we need the subfeatures in the yaml, always the same?)
+This feature identifies anomalies in the recorded locations for GPS-type questions.
 
 **Feature**
 
-Sub-features `gps_latitude`, `gps_longitude` and `gps_accuracy` are constructed for all questions of type `GpsCoordinateQuestion` in the microdata. Note that there may be none or multiple GPS question per interview and that they may refer to places other than the interview location, e.g., the location of the household plots. 
+Sub-features `gps_latitude`, `gps_longitude` and `gps_accuracy` are constructed for all items of type GpsCoordinateQuestion in the microdata. It's important to note that there might be no or multiple GPS questions within an interview. Additionally, these GPS questions could refer to various places beyond the interview location, such as the location of household plots. 
 
 **Score**
 
-`s__gps_proximity_count` for each unit returns number of other units within 10 meters radius + accuracy. Note maybe high accuracy might be an issue. In absolute numbers
+Type 1 Score. Three distinct scores are derived:
 
-`s__gps_spatial_extreme_outlier` find midpoint, median of lat and long, for each point calculate distance to midpoint, true if distance larger than 95 percentile of distancens + 30 kilometers (helps with high density cases)
+`s__gps_proximity_count`: Represents the total number of items located within a radius of 10 meters, plus the accuracies of both points, of any other points recorded within an interview. Note that high accuracy values could skew this score. The score essentially detects anomalies in location density. For instance, in stratified household surveys, numerous points at the same location could be suspicious. Conversely, in institutional surveys (like school or health center surveys), a high count is expected since interviews are usually conducted at the same location.
 
-`s__gps_spatial_outlier` exclude extreme outliers. if less than 10k records COF, otherwise LOF. COF is very memory demanding, seems to perform better, both are proximity based algorithms, COF works on connectivity based, while LOF. is binary  
+`s__gps_extreme_outlier` contains the count of extreme outlier locations in an interview. It indicates locations that were recorded outside the survey area. The score is derived by:
+- Computing the median longitude and latitude across all locations to establish a midpoint.
+- Determining the distance of each point to this midpoint.
+- Flagging points as anomalous if their distance to the midpoint exceeds the 95th percentile of all distances by over 30 kilometers (accounting for high-density cases).<!-- would not an MAD or IQR range be better, if we have no extreme outliers and widespread survey, this approach may pick up the edges, no? --> 
+- Counting these anomalous points within an interview. The score is treated in absolute terms, ensuring that interviews with any extreme outliers are deemed suspicious without being offset by other non-anomalous points within the same interview.
 
-0. any that are crazily far away like in another country or with 0 latitude and 0 longitude, are obviously with issues. 
-1. In combination with f__latitude, identify clusters and mark outliers from the cluster, e.g. distance in SD to the cluster mid-point (mean lat and long). These can show that the interview was not collected at the location but sometimes is due to GPS not working (which should be fixed by the interviewer), and interviewers recording the GPS on the way home or in the evening (all of which is undesired behaviour). 
-2. If some points are very close together (very low distance to other units within the cluster) with corresponding high accuracy (low number), and if this is not common, then this points at one or more interviewer taking interviews in the same place, which if not common is suspicious, as they might fabricate them from under the tree/restaurant/hotel/side of the road. 
-3. Maybe explore variation from cluster location - date to identify those that are in one cluster for much longer than others (e.g. could be interviewer doing things from hotel).
-4. If an outlier (let's say the point when they took the GPS in the car on the way back or in their hotel) was one of few Answers recorded, then it is more likely to be just a GPS issue (still bad enough, as we have then the wrong location for the household), but more or many Answers were set around the time where the outlier is, then more of the interview was done in a bad place, and this is extremely unlikely. 
-5. We could use GPS cluster as an independent variable to control for some of the variation in other variables.
-
-https://chat.openai.com/share/d09d54f5-91e0-44eb-bf19-efa7b408e873
-
-Huge values (low accuracy) is indicative of wrong tablet settings. 
+`s__gps_outlier` counts outlier locations within an interview. While some outliers might indicate legitimately remote locations, many arise from interviewers recording the GPS locations while on the move or at their accommodation. The score is derived by:
+- Excluding points flagged as extreme outliers. 
+- Detecting anomalies using [COF](https://github.com/yzhao062/pyod#thresholding-outlier-scores) for datasets containing fewer than 10k records, and [LOF](https://github.com/yzhao062/pyod#thresholding-outlier-scores) for larger datasets. Both methods are proximity-based, with COF generally performing better, albeit with higher memory demands.
+- Counting these anomalous points within an interview. The score is treated in absolute terms, ensuring that interviews with any extreme outliers are deemed suspicious without being offset by other non-anomalous points within the same interview.
 
 ## pause_count
 
+This feature highlights unusual frequencies of pauses during interviews.
+
 **Feature**
 
-`f__pause_count` is the unit-level count of interviewing events of type `Resumed` or `Restarted` in the paradata, that are preceded by event `Paused` (which is also logged after event events `Completed`).
+`f__pause_count` is the unit-level count of interviewing events of type `Resumed` or `Restarted` in the paradata. These are logged when the interview has been restarted or if the interviewer application has resumed to be active after the tablet screen was turned off or another application was accessed. It's important to note that this feature includes both short system-recorded pauses and longer deliberate pauses when the interview is intentionally interrupted.
 
 **Score**
 
-`s__pause_count`, total number of pauses over f_number_answered
+Type 2 Score. `s__pause_count` is derived by taking the ratio of `f__pause_count` to `f_number_answered`. This quantifies the frequency of pauses in relation to the length of the interview, measure in question answers. 
 
 ## pause_duration
 
-**Feature**
-
-`f__pause_duration` is constructed on the unit-level using interviewing events in the paradata. It is the sum of time difference in seconds between interviewing events of type `Resumed` or `Restarted` and preceding events of type `Paused` (which are also logged after event events `Completed`).
-
-**Score**
-
-`f__pause_duration` over elapsed.
-
-ignore below
-To control the sensibility of the outlier detection algorithm, pause duration is rounded to 2 hrs intervals for durations less then 24 hrs, and to full days for durations over 24 hrs. Anomalies are detected using [COF](https://github.com/yzhao062/pyod#thresholding-outlier-scores), which checks locally and is able to identify anomalies in the middle of a distribution. For example, pauses of 8, 10 or 12 hour length may be considered anomalous while shorter or longer pauses are not. 
-
-`s__pause_duration` is calculated as a boolean that takes the value TRUE if an interview contained a pause of anomalous length, and FALSE otherwise.
-
-## pause_list
+This feature identifies unusual duration of pauses during interviews.
 
 **Feature**
 
-`f__pause_list` is constructed on the unit-level using interviewing events in the paradata. It is a list of all the time difference in seconds between interviewing events of type `Resumed` or `Restarted` and preceding events of type `Paused` (which are also logged after event events `Completed`).
+`f__pause_duration` represents the total duration of all pauses in an interview. It is derived by summing up the durations between paradata events of type `Resumed` or `Restarted` and their preceding events. It's important to note that this feature includes the duration of both short system-recorded pauses and longer deliberate pauses when the interview is intentionally interrupted.
 
 **Score**
+
+Type 2 Score. `s__pause_duration` is computed as the proportion between `f__pause_duration` and `f__total_elapsed`. It measures the fraction of the total elapsed time that is attributed to pauses. 
 
 ## number_unanswered
 
+This feature quantifies the total number of unanswered questions in an interview.
+
 **Feature**
+
+`s__number_unanswered` represents the count of unanswered questions (values [-999999999, '##N/A##']) in the microdata that correspond to interviewing events in the paradata <!-- thinking about this again, the filter of only take observations that also exist in the paradata does not make sense for this feature (I think), maybe we drop the whole feature?? -->. Multi-select questions contribute as a single count. Survey Solution variables are excluded. 
 
 **Score**
 
-= feature
+Type 2 Score.  `s__number_unanswered` is directly equated to `f__number_unanswered`.
 
 ## number_answered
 
-equals feature 
+This feature quantifies the total number of answers recorded in an interview.
 
 **Feature**
 
+`s__number_answered` represents the count of answers recorded in the microdata that correspond to interviewing events in the paradata. Multi-select questions contribute as a single count. Answers with values [-999999999, '##N/A##'] are excluded since they signify questions that were enabled but remain unanswered. Survey Solution variables and system generated variables are also excluded. 
+
 **Score**
+
+Type 2 Score.  `s__number_answered` is directly equated to `f__number_answered`.
+
+<!-- should we also round here to e.g. interval of 10, like for duration, to control for sensibility? -->
 
 ## total_duration
 
-Detects anomalies in the interview duration. 
+This feature quantifies the total interview duration. 
 
 **Feature**
 
-`s__total_duration` is constructed on the unit level and contains an approximation of the total duration of active interviewing events. It is built as follows:
+`s__total_duration` is constructed on the unit level and contains an approximation of the total duration of active interviewing events. It is built by:
 
-- 
+- Keeping only active interviewing events, i.e of type `['AnswerSet', 'AnswerRemoved', 'CommentSet', 'Resumed', 'Restarted']`. Note, as of now, events of type `Paused` are excluded and not counted towards the total. 
+- For every event, computing the time interval to its preceding event (sorted by column `order`). 
+- Assigning NaN (Not a Number) to negative time intervals, which are unrealistic durations often resulting from interviewers altering the tablet's time settings.
+- Sum all time intervals for an interview that are shorter than 30 minutes. Longer time intervals occasionally occur, but it is save to assume that no active interviewing activities occurred if no event was recorded in the time interval.
+
+It's important to understand that `f__total_duration` is an approximation of the actual duration of all interviewing events. Pauses are excluded. In the future, it could be considered to include short pauses.
 
 **Score**
 
-To control the sensibility of the outlier detection algorithm, `f__total_duration` is rounded to the next 10 minutes interval. 
+Type 2 Score. `s__total_duration` is computed by rounding `f__total_duration to the next 10 minutes interval. This is done to control sensibility of the algorithm used to aggregate scores.
 
 ## total_elapsed
 
 **Feature**
-
+`f__total_elapsed`
 **Score**
 
 lower and upper outlier detection using ECOD, 
 correlated up to a certain level, we take upper and lower outlier booleans to avoid corraltion with duration.
-
-## single_question
-
-**Feature**
-
-**Score**
 
 ## multi_option_question
 
