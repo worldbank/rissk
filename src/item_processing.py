@@ -121,7 +121,12 @@ class ItemFeatureProcessing(FeatureProcessing):
 
         # Set a threshold (e.g., 95th percentile of distances)
         # Everything that is above 30 + the median distance is an outlier
-        threshold = data[mask]['distance_to_median'].quantile(0.95) + 30
+        p75 = data[mask]['distance_to_median'].quantile(0.75)
+        median = data[mask]['distance_to_median'].median()
+        range_75 = p75 - median
+        threshold = p75 + 3.5 * range_75
+
+
         data.loc[mask, 's__gps_extreme_outlier'] = data[mask]['distance_to_median'] > threshold
 
         # # Make a further cleaning with dbscan
