@@ -2,7 +2,14 @@
 
 # What is RISSK?
 
-RISSK utilizes machine learning algorithms to generate a **Unit Risk Score (URS)** from your **[Survey Solutions](https://mysurvey.solutions/en/)** export files. This score indicates the likelihood of unwanted interviewer behaviour in individual interviews. It is a valuable tool to prioritize suspicious interviews for verification exercises such as back-checking or audio audits. Designed to be generic, RISSK can be easily integrated into the monitoring systems of most CAPI or CATI surveys conducted using Survey Solutions. Setting up and running RISSK on your local machine is straightforward and platform-independent. Running locally, it ensures the privacy and security of your survey data.
+RISSK utilizes machine learning algorithms to generate a **Unit Risk Score (URS)** from your **[Survey Solutions](https://mysurvey.solutions/en/)** export files. This score indicates the likelihood of unwanted interviewer behaviour in individual interviews. It is a valuable tool to prioritize suspicious interviews for verification exercises such as back-checking or audio audits. Designed to be generic, RISSK can be easily integrated into the monitoring systems of most CAPI or CATI surveys conducted using Survey Solutions. Setting up and running RISSK on your local machine is straightforward and platform-independent. Running locally, it ensures the privacy and security of your survey data. Find out more in the chapters below.
+
+- [Getting started](#getting-started)
+- [Advanced use](#advanced-use)
+- [Interpretation](#interpretation)
+- [Survey integration](#survey-integration)
+- [Limitations](#limitations)
+- [Confirmation of results](#confirmation-of-results)
 
 # Getting started
 
@@ -78,8 +85,7 @@ cd /Users/USER/projects/rissk
 ```
 python main.py export_path=<export_path> output_file=<output_file>
 ```
-3. **Monitor progress**: After running the command, console logs will indicate the package's progress. Upon successful completion, a confirmation message will appear, indicating that the results have been saved to the specified directory.
-<!-- Do we have a message saying it's done?, Any python logs that can be removed-->
+3. **Monitor progress**: After running the command, console logs will indicate the package's progress. Upon successful completion, the following confirmation message will appear: _'SUCCESS! you can find the unit risk score output file in ...'_.
 
 # Advanced use
 
