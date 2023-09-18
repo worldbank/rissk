@@ -241,7 +241,8 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
     def make_score_unit__time_changed(self, feature_name):
         score_name = self.rename_feature(feature_name)
-        self._df_unit[score_name] = round(self._df_unit['f__time_changed'].abs())
+        # round to 10 min
+        self._df_unit[score_name] = round(self._df_unit['f__time_changed'].abs()/600)
 
     def make_score_unit__total_duration(self, feature_name):
         score_name = self.rename_feature(feature_name)
