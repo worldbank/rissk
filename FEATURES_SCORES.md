@@ -1,14 +1,43 @@
-> [!WARNING]  
-> Work in progress - please check back in a few days. 
-
-This document details the construction of all features and scores used in RISSK. Each feature has a corresponding Jupyter notebook stored in `rissk/notebook`. For a deeper dive into the individual feature analyses, users familiar with Python can refer to the respective notebook.
+This document details the construction of all features and scores used in RISSK. In the development branch, each feature has a corresponding Jupyter notebook stored in `rissk/notebook`. For a deeper dive into the individual feature analyses, users familiar with Python can refer to the respective notebook.
 
 > [!NOTE]  
 > Use outline button in the top-right corner for swift navigation between features.
 
-# Included
+# Definitions
+
+The terms below are frequently used in the ensuing descriptions. Here are their precise meanings:
+
+- **Interviewing events** refer to those events in the paradata that are recorded prior to any recorded action by a Supervisor or HQ role, i.e. the first event of type `['RejectedBySupervisor', 'OpenedBySupervisor', 'RejectedByHQ', 'OpenedByHQ']`. These events approximate the initial interview process, prior to any corrections or updates that may occur after the first intervention by Supervisor or HQ roles.
+
+- **Item** refers to a specific question in Survey Solutions for a given roster row. For questions located on the main questionnaire level, the term "item" is synonymous with the question itself. However, for questions that are part of rosters, each roster row for a question is considered an individual item.
+
+- **Unit** denotes a Survey Solutions interview, uniquely identified by its `interview__id`. 
+
+- **Score Type** are groups of scores that are constructed in similar ways. Refer to chapter [Process description](README.md#generating-scores) for a classification. 
+
+# Features and Scores
 
 The features listed below are included by default in the construction of the `unit_risk_score`.
+
+## answer_changed
+
+This feature identifies atypical number of alterations to question responses.
+
+**Feature**
+
+`f__answer_changed` is derived from all active interviewing events of type `AnswerSet` in the paradata. It quantifies the number of times the response to an item has been modified. Changes are computed as follows:
+
+- For single-answer questions, the answer value is compared with prior answer values for the item (if it exists). The event is counted if there's a discrepancy. 
+- For questions of type `MultyOptionsQuestion` and `TextListQuestion`, events are counted if the set of answers no longer contains any elements from the previous set of answers. This can occur if an answer option has been unselected or removed, or if the text of a list item has been removed. 
+- For multi-answer questions with Yes/No mode, both sets of Yes and No answers are evaluated and events counted if an answer option has been removed or changed from Yes to No or vice versa.
+
+**Score**
+
+Type 1 Score. Anomalies within `f__answer_changed` are detected using [ECOD](https://arxiv.org/pdf/2201.00382.pdf), an efficient, non-parametric algorithm that leverages cumulative distribution functions. The default contamination level is set to 0.1. If required, it can also be [set manually](README.md#adjusting-contamination-level) or be [determined automatically](README.md#automatically-determining-contamination-level) by the system. Anomalies are detected on the item-level by `variable_name`. 
+
+To clarify, anomalies are unusual high (or low) frequencies of changes to an item's answer, relative to the question's norm. For instance, if altering a member's age is typically done 0-2 times, items with 1 or 2 changes wouldn't be flagged as anomalies. However, if the age of a member is adjusted 3 or more times, this item could be earmarked as anomalous.
+
+`s__answer_changed` represents the fraction of items in an interview that were determined to be anomalous based on their `f__answer_changed` values.
 
 ## answer_hour_set
 
@@ -20,31 +49,13 @@ This feature captures active interviewing events that occur during unconventiona
 
 **Score**
 
-Type 1 Score. Anomalies in `f__answer_hour_set` across all events are detected using [ECOD](https://arxiv.org/pdf/2201.00382.pdf), an efficient, non-parametric algorithm that leverages cumulative distribution functions. The contamination level is determined automatically by default, but it can also be [set manually](README.md#Advanced-Use) if required.
+Type 1 Score. Anomalies in `f__answer_hour_set` are detected using [ECOD](https://arxiv.org/pdf/2201.00382.pdf), an efficient, non-parametric algorithm that leverages cumulative distribution functions. The default contamination level is set to 0.1. If required, it can also be [set manually](README.md#adjusting-contamination-level) or be [determined automatically](README.md#automatically-determining-contamination-level) by the system. Anomalies are detected on the item level across all observations.
 
 `s__answer_time_set` represents the proportion of anomalies within a given interview. Its values range from 0 (indicating the entire interview was conducted during typical hours) to 1 (indicating the entire interview took place during atypical hours). It's worth noting that this score treats every day identically, without differentiating based on the specific date or day of the week.  
 
-## answer_changed
-
-This feature highlights interviews with an atypical number of modifications to question responses.
-
-**Feature**
-
-`f__answer_changed` is derived from all active interviewing events of type `AnswerSet` in the paradata. It enumerates how often the response to an item has been altered. Changes are quantified in the following manner:
-
-- For single-answer questions, the answer value is compared with prior answer values for the item (if it exists). The event is counted if there's a discrepancy. 
-- For questions of type `MultyOptionsQuestion` and `TextListQuestion`, events are counted if the set of answers no longer contains any elements from the previous set of answers. This can occur if an answer option has been unselected or removed, or if the text of a list item has been removed. 
-- For multi-answer questions with Yes/No mode, both sets of Yes and No answers are evaluated and events counted if an answer option has been removed or changed from Yes to No or vice versa.
-
-**Score**
-
-Type 1 Score. Anomalies within `f__answer_changed` are detected using [ECOD](https://arxiv.org/pdf/2201.00382.pdf), an efficient, non-parametric algorithm that leverages cumulative distribution functions. The contamination level is determined automatically by default, but it can also be [set manually](README.md#Advanced-Use) if required. <!-- is below correct?, no, checkeing for anomalis without roster level, but aggregating on ratio of items with anomalies --> Anomalies are detected on the question level (`variable_name`) to reduce disaggregation. Each question is considered to have an anomaly if an anomaly was detected for the question on any `roster_level`. 
-
-`s__answer_changed` is the share of questions answered <!--answers or question?? --> with anomalies in `f__answer_changed` per interview. The value ranges from 0 (no anomalies) to 1 (hypothetical, only anomalies). An anomaly is an unusual high (or low) frequency of changes to the answer of a question. E.g., if it is commonplace for a member list question to be changed 0-2 times, these changes won't be classified as anomalies. However, the question may be deemed anomalous if it has been changed 5 times. 
-
 ## answer_removed
 
-This feature captures atypical frequencies of answer removals.
+This feature identifies atypical frequencies of answer removals.
 
 **Feature**
 
@@ -52,54 +63,25 @@ This feature captures atypical frequencies of answer removals.
 
 **Score**
 
-Type 1 Score. Anomalies in `f__answer_removed` are detected using [ECOD](https://arxiv.org/pdf/2201.00382.pdf), an efficient, non-parametric algorithm that leverages cumulative distribution functions. The contamination level is determined automatically by default, but it can also be [set manually](README.md#Advanced-Use) if required. <!-- Below still the case, as answers changed --> Anomalies are detected on the question level (`variable_name`) to reduce disaggregation. Each question is considered to have an anomaly if an anomaly was detected for the question on any `roster_level`. 
+Type 1 Score. Anomalies in `f__answer_removed` are detected using [ECOD](https://arxiv.org/pdf/2201.00382.pdf), an efficient, non-parametric algorithm that leverages cumulative distribution functions. The default contamination level is set to 0.1. If required, it can also be [set manually](README.md#adjusting-contamination-level) or be [determined automatically](README.md#automatically-determining-contamination-level) by the system. Anomalies are detected on the item-level by `variable_name`. 
 
-`s__answer_removed` is the share of questions in an interview that show anomalies in `f__answer_removed`. The score's range is from 0 (indicating no anomalies) to 1 (a theoretical scenario denoting only anomalies). An anomaly refers to an unusually high or low frequency of answer removals for a question. 
-
-## single_question
-
-call it single_question 
-
-This feature identifies the tendency to repeatedly select the same answer options in single-select questions.
-
-**Feature**
-
-`f__single_question` is constructed on the item level for all questions of type `SingleQuestion` in the microdata with fixed answer options (question is not linked), 2 or more answer options, and which are not of the Combobox type. The feature indicates the relative position of the chosen answer: a value of 0 means the top answer was selected, and a value of 1 means the bottom-most answer was selected. The feature is scaled in intervals of 1/N, where N is the total number of answer options available.
-
-<!-- is this still using position or actual values? -->
-
-**Score**
-
-Type 3 Score. `s__single_question` represents the proportion of questions for a given interviewer where there's a noticeable pattern in selecting similar or identical answer options compared to other interviewers. The score is derived by:
-
-- Identifying those `variable_name` for each interviewer with observations exceeding five times the number of available answer options.
-- Computing the entropy for these `variable_name` for each interviewer, capturing the diversity in their answers.
-- Designating a `variable_name` as anomalous for an interviewer if its entropy is less than half the median entropy value compared to other interviewers.
-- Calculating the share of anomalous variables over all variables for which entropy was assessed.
+`s__answer_removed` represents the fraction of items in an interview that were determined to be anomalous based on their `f__answer_removed` values.
 
 ## answers_selected
 
-Detects if unusual many or few have been selected
+This feature identifies unusual high or low number of answer options selected in multi select options. 
 
 **Feature**
-`f__answers_selected` is constructed on the item level for all answered questions of type `MultyOptionsQuestion` and `TextListQuestion` in the microdata. It contains:
+`f__answers_selected` is constructed on the item level for all answered questions of type `MultyOptionsQuestion` in the microdata. It contains:
 
 - For YesNo question, the number of YES options selected.
 - For other multi-answer questions, the number of answers selected.
-- For list questions, the number of items listed.
 
-Andreas to 
 **Score**
 
-share of answers selected, identify lower and upper outliers, using ECOD, 
+Type 1 Score. Anomalies within `f__answers_selected` are detected using [ECOD](https://arxiv.org/pdf/2201.00382.pdf), an efficient, non-parametric algorithm that leverages cumulative distribution functions. The default contamination level is set to 0.1. If required, it can also be [set manually](README.md#adjusting-contamination-level) or be [determined automatically](README.md#automatically-determining-contamination-level) by the system. Anomalies are detected on the item-level by `variable_name`. 
 
-
-
-`answer_share_selected`
-<!-- @Gabriele, naming? -->
-detect unusual high or low number of item selection
-
-andreas check notebook
+`s__answers_selected` represents the fraction of items in an interview that were determined to be anomalous based on their `f__answers_selected` values.
 
 ## answer_duration
 
@@ -118,13 +100,13 @@ It's important to understand that `f__answer_duration` is an approximation of th
 
 **Score**
 
-Type 1 Score. First, anomalies in `f__answer_duration` are identified using [ECOD](https://arxiv.org/pdf/2201.00382.pdf), an efficient, non-parametric algorithm that leverages cumulative distribution functions. Anomalies are detected on the item-level by `variable_name` <!-- also by interviewer? -->.
+Type 1 Score. First, anomalies in `f__answer_duration` are identified using [ECOD](https://arxiv.org/pdf/2201.00382.pdf), an efficient, non-parametric algorithm that leverages cumulative distribution functions. The default contamination level is set to 0.1. If required, it can also be [set manually](README.md#adjusting-contamination-level) or be [determined automatically](README.md#automatically-determining-contamination-level) by the system. Anomalies are detected on the item-level by `variable_name`.
 
 Subsequently, two scores, `s__answer_duration_lower` and `s__answer_duration_upper` are computed. They represent the share of items in an interview with anomalies at the lower or upper bounds respectively. Lower and upper end anomalies are treated separately as they indicate different potential undesired behaviours. Lower end anomalies point at interviewers rushing or fabricating data, upper end at interviewer struggling (or interview/respondent effects). 
 
 ## first_decimal
 
-Identifies anomalies in the first two decimal digits in numeric values.
+This feature identifies anomalies in the first two decimal digits in numeric questions.
 
 **Feature**
 
@@ -132,87 +114,28 @@ Identifies anomalies in the first two decimal digits in numeric values.
 
 **Score**
 
-For variables with at least 3 different answer values and a minimum of 100 records in total, anomalies in `f__first_decimal` are identified by `variable_name` using COF 
+Type 1 Score. Anomalies within `f__first_decimal` are detected using [COF](https://link.springer.com/chapter/10.1007/3-540-47887-6_53), an proximity-based algorithm that is able to handle outliers deviating from low density patterns. The default contamination level is set to 0.1. If required, it can also be [set manually](README.md#adjusting-contamination-level) or be [determined automatically](README.md#automatically-determining-contamination-level) by the system. Anomalies are detected on the item-level by `variable_name`. 
 
-As an example, if most answer values to a question contain decimals such as 0.25, 0.33, 0.5, 0.66, 0.75, a different value such as 0.47 would be flagged as anomaly. 
+To clarify, anomalies are unusual first two decimal values, relative to the question's norm. For instance, if most answer values to a question contain decimals such as `[0.25, 0.33, 0.5, 0.66, 0.75]`, a different and rare value such as `0.47` would be flagged as anomaly. 
 
-`s__first_decimal` is the share of numeric answers (filtered as above) with anomalies by interview.
+`s__first_decimal` represents the fraction of items in an interview that were determined to be anomalous based on their `f__first_decimal` values.
 
 ## first_digit
 
-**Feature**
-
-`f__first_digit` contains the first digit of the response to all questions of type `NumericQuestion` in the microdata.
-
-**Score**
-
-can maybe use it for Benfords law.
-
-## last_digit
-
-**Feature**
-`f__last_digit` contains the last digit (modulus of 10) of the response to all questions of type `NumericQuestion` in the microdata.
-
-**Score**
-
-in questions where we expect uniform distribution (e.g. height, weight, etc) and don't want to see rounding (0 and 5s), in others, e.g. monetary values we do not want to see values other than 0 if most of the others are 0.
-
-## numeric_response
+This feature detects atypical distribution of first digits in numeric questions.
 
 **Feature**
 
-`f__numeric_response` contains the response to all questions of type `NumericQuestion` in the microdata.
+`f__first_digit` extracts the leading digit from the response of all questions classified as `NumericQuestion` in the microdata.
 
 **Score**
 
-Note, numeric responses may contain "special values", often -99,-98 or 99, 999, 9999. They vary from survey to survey, but ideally are outside of the valid range. There might be multiple special values per question. They should be the same for the question and ideally for the entire questionnaire, but often people are sloppy. We can try to identify them automatically (outliers, that are the same number), or if not possible, ask this as input from the user. If they used the sepcial value feature from Survey Solutions, we might be able to extract it.
+Type 3 Score. `s__first_digit` quantifies the fraction of questions for which a specific interviewer exhibits a distinctly different first digit distribution as compared to their counterparts. The score is constructed by:
 
-1. At a minimum automatically detect single variate outliers. Check distribution, if goes over orders of magnitude, take ln(). Work with iqrs or mad better than SD from mean as less outlier prone. Check outlier on item level, i.e. by VariableName and roster_level. You can also try to ignore roster_level and see if it makes a difference (i.e. compare all observations from one VariableName, independent from which roster they are from). 
-
-2. Ideally, it would be great to also look into multivariate outlier detection, i.e. how weird is a response, given the other responses. Not clear how this could be automated, and how heavy this would be. 
-
-3. Instead of only looking for outliers (just at the extremes), it would be great to also normalize the in a meaningful and outlier independent way, to get a measure of how extreme/non-extreme they are. The hypothesis is that cheaters attempt to avoid extreme values. 
-
-## sequence_jump
-
-Detects unusual patters in question answering sequence. 
-
-**Feature**
-
-`f__sequence_jump` counts the number of question sequences the interviewer jumped answering an item since the previous item. It is constructed the following way:
-
-- For each item, the last interviewing event in paradata of type `AnswerSet` is kept. If an item was answered multiple times (e.g., re-answered later during interview), only the last event is considered. 
-- For each item, the difference `diff` is calculated between the answer sequence (sequential number in paradata, sorted by column `order`) and the question sequence (sequence of question in the questionnaire). 
-- The difference in `diff` to the previous item is calculated, allowing to compare if (groups of) questions have been answered in sequence even if previous sequence jumps occurred. 
-
-`f__sequence_jump` take the value 0 if a question was answered directly after the previous question in terms of questionnaire sequence. Negative values correspond to a jump back in questionnaire sequence, while positive values correspond to a jump forward. If a questions was preceded by disabled questions (that could not be answered), this will be shown by a positive jump. Note that the first question on roster instances other than the first row start often has negative jumps, as interviewers "go back" a few questions in questionnaire sequence to start with the next roster item. 
-
-**Score**
-
-For each VariableName on the roster_level, there should be a set of legitimate jumps to get to this question, depending on the enablement conditions of the preceeding questions (usually positive, negative, only for first rowster rows). Check for unusual jumps. I think we can ignore unusual jumps if they were preceeded by an opposite jump of the same length (or +abs(1) jump), as it is just a second symptom of the same jump (assuming they go back to where they were previously. Unusual small positive numbers (i.e. interviewer skipped a question) but immediatelty followed by negative questions (i.e. interviewer noticed, went back and answered it) are not that bad and should maybe only be flagged if they occur frequently.
-
-## string_length
-
-**Feature**
-
-`f__string_length` contains the length of the answer string to questions of type `TextQuestions` in the microdata.
-
-**Score**
-
-some string questions require detailed description, very short one might be indicative of not enough attention to detail.
-Other specify fields (maybe identifiable as those questions that do not always have an answer), excessive use by one interviewer is not desirable
-
-## time_changed
-
-**Feature**
-
-WHAT IS IT? COUNT? TOTAL IN SEC?
-
-`f__time_changed` is constructed using active interviewing events in the paradata. Consecutive active events with a negative time difference lower than 180 seconds. Note that this excludes small negative time intervals (of under 2 minutes) generated by questions being answered after a GPS question has been clicked, but before the response to the GPS questions was recorded.
-
-**Score**
-
-Time changes are due to tablet time being reset, usually purposefully by the interviewer.
+- Identifying those `variable_name` where answer values span over three orders of magnitude (a necessary condition for Benford's Law to apply).
+- For each interviewer and `variable_name`, compute the [Jensen-Shannon (JS) divergence](https://en.wikipedia.org/wiki/Jensen%E2%80%93Shannon_divergence). This measures the deviation of an interviewer's first digit distribution from the collective distribution of the same variable across all other interviewers.
+- Tagging a `variable_name` as anomalous for an interviewer if its JS divergence value is less than half of the median JS divergence value for that variable.
+  - For each interviewer, calculating the share of anomalous variables.
 
 ## gps
 
@@ -231,13 +154,43 @@ Type 1 Score. Three distinct scores are derived:
 `s__gps_extreme_outlier` contains the count of extreme outlier locations in an interview. It indicates locations that were recorded outside the survey area. The score is derived by:
 - Computing the median longitude and latitude across all locations to establish a midpoint.
 - Determining the distance of each point to this midpoint.
-- Flagging points as anomalous if their distance to the midpoint exceeds the 95th percentile of all distances by over 30 kilometers (accounting for high-density cases).<!-- would not an MAD or IQR range be better, if we have no extreme outliers and widespread survey, this approach may pick up the edges, no? --> 
+- Calculating the 50th and 75th percentile of the distances, and calculating the range p75-p50. 
+- Flagging points as anomalous if their distance to the midpoint exceeds 3.5 times the p75-p50 range. 
 - Counting these anomalous points within an interview. The score is treated in absolute terms, ensuring that interviews with any extreme outliers are deemed suspicious without being offset by other non-anomalous points within the same interview.
 
 `s__gps_outlier` counts outlier locations within an interview. While some outliers might indicate legitimately remote locations, many arise from interviewers recording the GPS locations while on the move or at their accommodation. The score is derived by:
 - Excluding points flagged as extreme outliers. 
 - Detecting anomalies using [COF](https://github.com/yzhao062/pyod#thresholding-outlier-scores) for datasets containing fewer than 10k records, and [LOF](https://github.com/yzhao062/pyod#thresholding-outlier-scores) for larger datasets. Both methods are proximity-based, with COF generally performing better, albeit with higher memory demands.
 - Counting these anomalous points within an interview. The score is treated in absolute terms, ensuring that interviews with any extreme outliers are deemed suspicious without being offset by other non-anomalous points within the same interview.
+
+## multi_option_question
+
+This feature identifies interviewers' tendency to repeatedly select the same answer options in multi-select questions.
+
+**Feature**
+
+`f__multi_option_question` is constructed on the item level for all questions of type `MultyOptionsQuestion` in the microdata with fixed answer options (question is not linked), 2 or more answer options, and which are not of the Combobox type. The feature indicates the relative position of the chosen answers: a value of 0 means the top answer was selected, and a value of 1 means the bottom-most answer was selected. The feature is scaled in intervals of 1/N, where N is the total number of answer options available.
+
+**Score**
+
+Type 3 Score. `s__multi_option_question` represents the proportion of questions for a given interviewer where there's a noticeable pattern in selecting similar or identical answer options compared to other interviewers. The score is derived by:
+
+- Identifying those `variable_name` for each interviewer with observations exceeding five times the number of available answer options.
+- Computing the entropy for these `variable_name` for each interviewer, capturing the diversity in their answers.
+- Designating a `variable_name` as anomalous for an interviewer if its entropy is less than half the median entropy value compared to other interviewers.
+- Calculating by interviewer the share of anomalous variables over all variables for which entropy was assessed.
+
+## number_answered
+
+This feature quantifies the total number of answers recorded in an interview.
+
+**Feature**
+
+`s__number_answered` represents the count of answers recorded in the microdata that correspond to interviewing events in the paradata. Multi-select questions contribute as a single count. Answers with values [-999999999, '##N/A##'] are excluded since they signify questions that were enabled but remain unanswered. Survey Solution variables and system generated variables are also excluded. 
+
+**Score**
+
+Type 2 Score.  `s__number_answered` is directly equated to `f__number_answered`.
 
 ## pause_count
 
@@ -261,33 +214,58 @@ This feature identifies unusual duration of pauses during interviews.
 
 **Score**
 
-Type 2 Score. `s__pause_duration` is computed as the proportion between `f__pause_duration` and `f__total_elapsed`. It measures the fraction of the total elapsed time that is attributed to pauses. 
+Type 2 Score. `s__pause_duration` is computed as the proportion between `f__pause_duration` and `f__total_elapsed`. It measures the fraction of the total elapsed time that is attributed to pauses.
 
-## number_unanswered
+## sequence_jump
 
-This feature quantifies the total number of unanswered questions in an interview.
-
-**Feature**
-
-`s__number_unanswered` represents the count of unanswered questions (values [-999999999, '##N/A##']) in the microdata that correspond to interviewing events in the paradata <!-- thinking about this again, the filter of only take observations that also exist in the paradata does not make sense for this feature (I think), maybe we drop the whole feature?? -->. Multi-select questions contribute as a single count. Survey Solution variables are excluded. 
-
-**Score**
-
-Type 2 Score.  `s__number_unanswered` is directly equated to `f__number_unanswered`.
-
-## number_answered
-
-This feature quantifies the total number of answers recorded in an interview.
+This feature identifies irregular patterns in the question answering sequence.
 
 **Feature**
 
-`s__number_answered` represents the count of answers recorded in the microdata that correspond to interviewing events in the paradata. Multi-select questions contribute as a single count. Answers with values [-999999999, '##N/A##'] are excluded since they signify questions that were enabled but remain unanswered. Survey Solution variables and system generated variables are also excluded. 
+`f__sequence_jump` quantifies the number of question sequences the interviewer skipped or jumped over when answering an item, relative to the previous item. It is derived as follows:
+
+- For each item, retain only the last interviewing event of type `AnswerSet` from the paradata. If an item was answered multiple times (e.g., re-answered later during the interview), only the last event is considered.
+- For each item, calculate the difference `diff` between the answer sequence (sequential number in paradata, sorted by column `order`) and the question sequence (the order of question in the questionnaire). 
+- Determine the change in `diff` relative to the previous item. This step helps in identifying whether (groups of) questions were answered sequentially, even if there were previous sequence jumps. 
+
+A `f__sequence_jump` value of 0 implies that a question was answered immediately after the preceding question, according to the questionnaire sequence. Negative values denote a jump back in the questionnaire sequence, while positive values indicate a forward jump. A positive jump can also arise when preceding questions are disabled and therefore unanswerable. It's worth noting that the initial question in roster instances, other than the first row, often has negative jumps, as interviewers "revert" a few questions in the questionnaire sequence to commence with the subsequent roster item. 
 
 **Score**
 
-Type 2 Score.  `s__number_answered` is directly equated to `f__number_answered`.
+Type 1 Score. Anomalies within `f__sequence_jump` are detected using [iNNE](https://onlinelibrary.wiley.com/doi/abs/10.1111/coin.12156), a fast, isolation-based algorithm adept at detecting local anomalies. The default contamination level is set to 0.1. If required, it can also be [set manually](README.md#adjusting-contamination-level) or be [determined automatically](README.md#automatically-determining-contamination-level) by the system. Anomalies are detected on the item-level by `variable_name`. 
 
-<!-- should we also round here to e.g. interval of 10, like for duration, to control for sensibility? -->
+In essence, anomalies are considered as unusual sequence jumps to an item. These can arise either from legitimate yet atypical enablement patterns in preceding items or from interviewers skipping or backtracking to answer the item.
+
+`s__sequence_jump` represents the fraction of items in an interview that were determined to be anomalous based on their `f__sequence_jump` values.
+
+## single_question
+
+This feature identifies interviewers' tendency to repeatedly select the same answer options in single-select questions.
+
+**Feature**
+
+`f__single_question` is constructed on the item level for all questions of type `SingleQuestion` in the microdata with fixed answer options (question is not linked), 2 or more answer options, and which are not of the Combobox type. The feature indicates the relative position of the chosen answer: a value of 0 means the top answer was selected, and a value of 1 means the bottom-most answer was selected. The feature is scaled in intervals of 1/N, where N is the total number of answer options available.
+
+**Score**
+
+Type 3 Score. `s__single_question` represents the proportion of questions for a given interviewer where there's a noticeable pattern in selecting similar or identical answer options compared to other interviewers. The score is derived by:
+
+- Identifying those `variable_name` for each interviewer with observations exceeding five times the number of available answer options.
+- Computing the entropy for these `variable_name` for each interviewer, capturing the diversity in their answers.
+- Designating a `variable_name` as anomalous for an interviewer if its entropy is less than half the median entropy value compared to other interviewers.
+- Calculating by interviewer the share of anomalous variables over all variables for which entropy was assessed.
+
+## time_changed
+
+This feature identifies the extent to which tablet time has been adjusted backward in an interview, usually done deliberately by interviewers.
+
+**Feature**
+
+`f__time_changed` is calculated at the unit level by examining the time differences between consecutive active interviewing events recorded in the paradata. All negative time differences, excluding those within a 180-second range, are aggregated. This approach deliberately omits minor negative time intervals (up to 3 minutes) which can arise when questions are answered after initiating a GPS question but before its response has been logged. The negative time differences captured in f__time_changed generally indicate intentional adjustments to the tablet's clock by the interviewer. Such adjustments might be made to alter the timestamps shown in timestamp questions or to give the appearance of conducting interviews at different times or dates.
+
+**Score**
+
+Type 2 Score. `s__time_changed` is computed by rounding `f__time_changed` to the nearest 10 minutes interval. This is done to control sensibility of the algorithm used for score aggregation.
 
 ## total_duration
 
@@ -306,52 +284,18 @@ It's important to understand that `f__total_duration` is an approximation of the
 
 **Score**
 
-Type 2 Score. `s__total_duration` is computed by rounding `f__total_duration to the next 10 minutes interval. This is done to control sensibility of the algorithm used to aggregate scores.
+Type 2 Score. `s__total_duration` is computed by rounding `f__total_duration` to the nearest 10 minutes interval. This is done to control sensibility of the algorithm used for score aggregation.
 
 ## total_elapsed
 
+This feature quantifies the total time that has elapsed in an interview.
+
 **Feature**
-`f__total_elapsed`
+
+`f__total_elapsed` is computed at the unit level by calculating the time difference between the first and last interviewing events recorded in the paradata. It measures the total time that has elapsed from the moment an interview was started to the last action taken by an interviewer before any Supervisor or Headquarters role first interacted with the interview. In scenarios where interviews were conducted in a single session without any interruptions, `f__total_elapsed` closely mirrors `f__total_duration`. However, for interviews that experienced pauses and were resumed later, the elapsed time captured by `f__total_elapsed` could be substantially longer than that of `f__total_duration`.
+
 **Score**
 
-lower and upper outlier detection using ECOD, 
-correlated up to a certain level, we take upper and lower outlier booleans to avoid corraltion with duration.
+Type 2 Score. First, anomalies in `f__total_elapsed` are identified using [ECOD](https://arxiv.org/pdf/2201.00382.pdf), an efficient, non-parametric algorithm that leverages cumulative distribution functions.
 
-## multi_option_question
-
-**Feature**
-values selected for multi option questions 
-**Score**
-
-same as answer_position
-
-# Not included
-
-The following features have been extracted, but no utility has been found for them in the testing data (too few observations). They require more testing data and further investigation to be converted into scores.
-
-## comment_length
-
-**Feature**
-
-`f__comment_length` contains the total length of comments set for an item, extracted from active interviewing events of type `CommentSet` in the paradata. 
-
-**Rationale**
-
-Very short comments (e.g. length <= 3) or comments only containing numeric values are often due to interviewers writing the answer to the question into the comment. This may be due to questionnaire mistake, in which case we should see comments frequently for the item, or interviewers being confused, which we would like to flag. Longer comments may provide more information.
-
-## comment_set
-
-**Feature**
-
-`f__comment_set` contains the total number of comments set for an item, extracted from active interviewing events of type `CommentSet` in the paradata. 
-
-**Rationale**
-
-In principle, comments should provide additional information to the Supervisor/HQ/data user, e.g., when the interviewer cannot solve a problem or wants to confirm a unusual answer. Item level anomalies from other features with comments set for the same item may be less of an issue. If comments are frequent, the absence of comments may be suspicious.
-
-## comment_duration
-
-**Feature**
-
-`f__comment_duration` is constructed similar to [answer_duration](#answerduration), summing instead the intervals for all events of type `CommentSet`.
-
+Subsequently, two scores are computed: `s__total_elapsed_lower` and `s__elapse_duration_upper`. Both are boolean values representing anomalies detected at the lower or upper boundaries of elapsed time, respectively. By distinguishing between the lower and upper anomalies, we mitigate potential correlations with the `s__total_duration` score.

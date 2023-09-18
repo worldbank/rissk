@@ -86,8 +86,6 @@ python main.py export_path=<export_path> output_file=<output_file>
 ## Exporting feature score
 By default, RISSK exports only the `output_file` containing the `unit_risk_score` for each interview. However, if you're interested in examining individual scores, you can achieve this by using the optional parameter `feature_score=true` when running RISSK.
 
-To activate this option, execute the following:
-
 ```
 python main.py export_path=<export_path> output_file=<output_file> feature_score=true
 ```
@@ -117,17 +115,26 @@ features:
 
 ## Adjusting contamination level
 
-Some algorithms used for score calculation require you to set a contamination level. RISSK defaults to using the `medfilt` thresholding method to automatically determine this level. You can override this by specifying the `contamination` parameter for the relevant score in `environment/main.yaml`.
+Default values have been set for algorithms that require contamination level, based on our testing data. You can override defaults by adjusting the `contamination` parameter for the relevant score in `environment/main.yaml`.
 
-For example, to set a contamination level of 0.1 for the ECOD algorithm used in the calculation of the `answer_changed` score:
+For example, to set a contamination level of 0.12 for the ECOD algorithm used in the calculation of the `answer_changed` score:
 
 ```yaml
   answer_changed:
     use: true
     parameters:
-      contamination: 0.1
+      contamination: 0.12
 ```
-Please refer to [FEATURES_SCORES.md](FEATURES_SCORES.md) to identify which features allow for the `contamination` parameter to be set.
+
+## Automatically determining contamination level
+
+Optionally, the `medfilt` thresholding method can be used to automatically determine the contamination levels for each algorithm. Automatically determining contamination level increases memory use and time to run RISSK, but improved RISSK's effectiveness in our [experiment](#results). 
+
+You can activate this option by using the optional parameter `automatic_contamination=true` when running RISSK.
+
+```
+python main.py export_path=<export_path> output_file=<output_file> automatic_contamination=true
+```
 
 # Interpretation
 
@@ -264,19 +271,23 @@ The table below summarizes the results for the top 5, 10, 15 and 20 percent:
 |    N | Share selecting top URS<br/>(share_urs) |    Share selecting at random <br/>(share_rand) | Ratio<br/>(share_urs/share_rand) |
 |-----:|----------------------------------------:|-----------------------------------------------:|---------------------------------:|
 |   5% |                                     82% |                                          22.4% |                              3.7 |
-|  10% |                                     62% |                                          22.4% |                              2.7 |
-|  15% |                                     59% |                                          22.4% |                              2.6 |
-|  20% |                                     56% |                                          22.4% |                              2.5 |
+|  10% |                                     56% |                                          22.4% |                              2.5 |
+|  15% |                                     43% |                                          22.4% |                              1.9 |
+|  20% |                                     41% |                                          22.4% |                              1.9 |
 
-In our test, selecting the top 5% of interviews based on their URS yielded 3.7 times more artificial fakes than if selected randomly. This ratio decreases as we select a larger percentage of interviews, but at 2.5 for 20% continues to be significantly higher within the range of review/verification ratios common in surveys. 
+In our test, selecting the top 5% of interviews based on their URS yielded 3.7 times more artificial fakes than if selected randomly. This ratio decreases as we select a larger percentage of interviews, but at 1.9 for 20% continues to be significantly higher within the range of review/verification ratios common in surveys. 
 
 In the chart below, the blue line (with the y-axis on the left) illustrates how `share_urs` varies as we increase the number of interviews selected, ranging from 1 to 100 of all interviews. The orange horizontal line, set at 22.4%, represents `share_rand`. The green line (with the y-axis on the right) indicates the percentage of all artificially created fake interviews contained within the top N% of interviews, sorted by their URS. As the chart shows, over two-thirds of all artificial interviews are found within the top 40% of interviews when sorted by URS.
 
 In below chart, the blue line (y-axis on left) shows how `share_urs` behaves as we increase the number of interviews selected continuously from 1 to 100 of all interviews. The orange horizontal line at 22.4% equals `share_rand`. The green line (y-axis on right) shows the percentage of all artificial fakes contained in the top N% of interviews. As can be seen, over two thirds of all artificial interviews are within the top 40% of interviews with the highest URS.  
 
-![experiment](images/experiment_results.png)
+![experiment](images/final_output_no_automatic_contamintation.png)
 
-Please note that these results are based on the classification of interviews as either real or artificially created, according to the experiment's design. While none of the artificially created interviews can be devoid of issues, some of the real interviews with relatively high `unit_risk_score` may also contain problematic behavior. This could potentially increase the `share_urs` value, further demonstrating the utility of the tool in identifying at-risk interviews.
+The results presented above were obtained by running RISSK with its default settings. The chart below shows results obtained using the option `automatic_contamination=true`. This option enables the system to automatically determine the contamination levels employed by the relevant algorithms during score calculations. In our tests, using the automatic contamination level showed slightly weaker performance in the 0-10% range but surpassed the default settings in the 10-20% range.
+
+![experiment](images/final_output_automatic_contamination.png)
+
+Please note that our results are based on the classification of interviews as either real or artificially created, according to the experiment's design. While none of the artificially created interviews can be devoid of issues, some of the real interviews with relatively high `unit_risk_score` may also contain problematic behavior. This could potentially increase the `share_urs` value, further demonstrating the utility of the tool in identifying at-risk interviews.
 
 > [!NOTE]
 > The effectiveness is likely to differ between surveys as it depends on the nature of problematic interviews. 

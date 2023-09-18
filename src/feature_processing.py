@@ -408,7 +408,7 @@ class FeatureProcessing(ImportManager):
 
     def make_feature_item__answer_selected(self, feature_name):
         # f__answers_selected, number of answers selected in a multi-answer or list question
-        multi_list_mask = self._df_item['type'].isin(['MultyOptionsQuestion', 'TextListQuestion'])
+        multi_list_mask = self._df_item['type'].isin(['MultyOptionsQuestion'])
 
         # Function to calculate the number of elements in a list or return nan
         def count_elements_or_nan(val):
