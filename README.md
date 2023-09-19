@@ -10,6 +10,8 @@ RISSK utilizes machine learning algorithms to generate a **Unit Risk Score (URS)
 - [Survey integration](#survey-integration)
 - [Limitations](#limitations)
 - [Confirmation of results](#confirmation-of-results)
+- [Process description](#process-description)
+- [Roadmap](#roadmap)
 
 # Getting started
 
