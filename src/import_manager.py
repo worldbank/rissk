@@ -111,7 +111,7 @@ def transform_multi(df, variable_list, transformation_type):
             for col in related_cols:
 
                 if transformation_type == 'unlinked':
-                    suffix = int(col.split('__')[1])
+                    suffix = int(col.split('__')[1].replace('n', '-'))
                     mask = df[col] > 0
                     transformation = [x + [suffix] if mask.iloc[i] else x for i, x in enumerate(transformation)]
                 elif transformation_type == 'linked':
