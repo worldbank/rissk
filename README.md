@@ -72,7 +72,7 @@ pip install -r requirements.txt
    - For the **Paradata**, under Data Type, select the option labelled **Paradata**. <details><summary>Click to see a screenshot of the selected export options for Paradata.</summary>![Export options Paradata](images/export_para.png)</details>
 
 3. **Place export files into the export folder**: Place both ZIP files into the `<export_path>` folder. Do not modify, rename or unzip the files. The folder should contain only the Main Survey Data and Paradata export files for a single version. 
-4. **Compatible versions**: If multiple versions of the **same** survey template (questionnaire) are compatible and you wish to evaluate them together, export both, the Main Survey Data and Paradata for all versions. Place the unmodified ZIP files into the `<export_path>` folder. When running the package, you will need to specify option `survey_versions=all` (see Step 2 in the subsection Running the package). **Do not include** export files from different survey templates (questionnaires). 
+4. **Compatible versions**: If multiple versions of the **same** survey template (questionnaire) are compatible and you wish to evaluate them together, export both, the Main Survey Data and Paradata for all versions. Place the unmodified ZIP files into the `<export_path>` folder. When running the package, you will need to specify option `survey_version=all` (see Step 2 in the subsection Running the package). **Do not include** export files from different survey templates (questionnaires). 
 
 
 ## Running the package
@@ -83,7 +83,7 @@ cd /Users/USER/projects/rissk
 ```
 2. **Execute the Package**: Run the package using the command below, replacing:
    - `<export_path>` with the **absolute** path to the folder containing your Survey Solutions export data.
-   - `<output_file>` with the complete file path for the output CSV file. Note that you must specify the full path, not just the file name. If this is not provided, the results will be stored in the default file  `rissk/result/unit_risk_score.csv`.
+   - `<output_file>` with the complete file path for the output CSV file. Note that you must specify the full path, not just the file name. If this is not provided, the results will be stored in the default file  `rissk/unit_risk_score.csv`.
 ```
 python main.py export_path=<export_path> output_file=<output_file>
 ```
