@@ -5,7 +5,7 @@ from sklearn.preprocessing import normalize
 # from sklearn.decomposition import PCA
 from pyod.models.pca import PCA
 from pyod.models.iforest import IForest
-
+from sklearn.impute import SimpleImputer
 
 def windsorize_95_percentile(df):
     """
@@ -81,31 +81,62 @@ class UnitDataProcessing(ItemFeatureProcessing):
 
             self._df_unit['unit_risk_score'] = scaler.fit_transform(self._df_unit[['unit_risk_score']])
 
+    # def make_responsible_score(self, restricted_columns):
+    #     scaler = StandardScaler()
+    #     columns = [col for col in self._df_resp.columns
+    #                if col.startswith('responsible') is False and col not in restricted_columns]
+    #
+    #     self._df_resp = self._df_resp.groupby('responsible')[columns].mean()
+    #     self._df_resp = self._df_resp.reset_index()
+    #
+    #     df_resp = self._df_resp[columns].fillna(0)
+    #     # Remove columns with constant values
+    #     df_resp = df_resp.loc[:, df_resp.nunique() != 1]
+    #     df_resp = pd.DataFrame(scaler.fit_transform(df_resp), columns=df_resp.columns)
+    #
+    #     model = PCA(random_state=42)
+    #     model.fit(df_resp)
+    #     self._df_resp['responsible_score'] = model.decision_scores_  # function(df1)
+    #     # scaler = MinMaxScaler(feature_range=(0, 1))
+    #     # self._df_resp['responsible_score'] = scaler.fit_transform(self._df_resp[['responsible_score']])
+    #     self._df_resp['responsible_score'] = normalize(self._df_resp[['responsible_score']], norm='l1', axis=0)
+
     def make_responsible_score(self, restricted_columns):
-        scaler = StandardScaler()
-        columns = [col for col in self._df_resp.columns
-                   if col.startswith('responsible') is False and col not in restricted_columns]
+        cols = [c for c in self._df_resp.columns
+                if not c.startswith('responsible') and c not in restricted_columns]
 
-        self._df_resp = self._df_resp.groupby('responsible')[columns].mean()
-        self._df_resp = self._df_resp.reset_index()
+        # If nothing to compute from, default to neutral weight = 1.0
+        if len(cols) == 0:
+            self._df_resp['responsible_score'] = 1.0
+            return
 
-        df_resp = self._df_resp[columns].fillna(0)
-        # Remove columns with constant values
-        df_resp = df_resp.loc[:, df_resp.nunique() != 1]
-        df_resp = pd.DataFrame(scaler.fit_transform(df_resp), columns=df_resp.columns)
+        self._df_resp = (
+            self._df_resp.groupby('responsible', as_index=False)[cols].mean()
+        )
+
+        X = self._df_resp[cols].copy()
+        X = SimpleImputer(strategy='median').fit_transform(X)
+        X = StandardScaler().fit_transform(X)
 
         model = PCA(random_state=42)
-        model.fit(df_resp)
-        self._df_resp['responsible_score'] = model.decision_scores_  # function(df1)
-        # scaler = MinMaxScaler(feature_range=(0, 1))
-        # self._df_resp['responsible_score'] = scaler.fit_transform(self._df_resp[['responsible_score']])
-        self._df_resp['responsible_score'] = normalize(self._df_resp[['responsible_score']], norm='l1', axis=0)
+        model.fit(X)
+
+        # Raw decision scores → clean
+        raw = pd.Series(model.decision_scores_, index=self._df_resp.index)
+        col = raw.to_frame(name='score').replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+        # If the L1 norm is zero, normalization would yield NaNs → use neutral 1.0
+        l1 = np.abs(col.values).sum()
+        if l1 == 0:
+            self._df_resp['responsible_score'] = 1.0
+        else:
+            self._df_resp['responsible_score'] = normalize(col, norm='l1', axis=0).ravel()
 
     def save(self):
         df = self._df_unit[['interview__id', 'responsible', 'unit_risk_score']]  # .copy()
         df['unit_risk_score'] = df['unit_risk_score'].round(2)
         df.sort_values('unit_risk_score', inplace=True)
-        file_name = "_".join([self.config.surveys[0], self.config.survey_version[0], 'unit_risk_score']) + ".csv"
+        #file_name = "_".join([self.config.surveys[0], self.config.survey_version[0], 'unit_risk_score']) + ".csv"
         output_path = self.config['output_file'].split('.')[0] + '.csv'
         df.to_csv(output_path, index=False)
         print(f'SUCCESS! you can find the unit risk score output file in {output_path}')

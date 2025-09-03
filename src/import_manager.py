@@ -115,7 +115,8 @@ def transform_multi(df, variable_list, transformation_type):
                     mask = df[col] > 0
                     transformation = [x + [suffix] if mask.iloc[i] else x for i, x in enumerate(transformation)]
                 elif transformation_type == 'linked':
-                    # !TODO if you add the (df[col] != -999999999) filter it removes also list that not only contains -999...
+                    # !NOTE! if you add the (df[col] != -999999999) filter it removes also list that not only
+                    # contains -999...
                     mask = (df[col].notna())  # & (df[col] != -999999999)
                     transformation = [x + [df.at[i, col]] if mask.iloc[i] else x for i, x in enumerate(transformation)]
                 elif transformation_type == 'list':
@@ -165,16 +166,18 @@ def get_microdata(survey_path, df_questionnaires, survey_name, survey_version):
                       ('interview__', 'assignment__', 'paradata.tab'))]
 
     # define multi/list question conditions
-    unlinked_mask = (df_questionnaires['type'] == 'MultyOptionsQuestion') & (df_questionnaires['is_linked'] == False)
-    linked_mask = (df_questionnaires['type'] == 'MultyOptionsQuestion') & (df_questionnaires['is_linked'] == True)
-    list_mask = (df_questionnaires['type'] == 'TextListQuestion')
-    gps_mask = (df_questionnaires['type'] == 'GpsCoordinateQuestion')
+    if df_questionnaires.empty is False:
+        unlinked_mask = (df_questionnaires["type"] == 'MultyOptionsQuestion') & (
+                df_questionnaires['is_linked'] == False)
+        linked_mask = (df_questionnaires["type"] == 'MultyOptionsQuestion') & (df_questionnaires['is_linked'] == True)
+        list_mask = (df_questionnaires["type"] == 'TextListQuestion')
+        gps_mask = (df_questionnaires["type"] == 'GpsCoordinateQuestion')
 
-    # extract multi/list question lists from conditions
-    multi_unlinked_vars = df_questionnaires.loc[unlinked_mask, 'variable_name'].tolist()
-    multi_linked_vars = df_questionnaires.loc[linked_mask, 'variable_name'].tolist()
-    list_vars = df_questionnaires.loc[list_mask, 'variable_name'].tolist()
-    gps_vars = df_questionnaires.loc[gps_mask, 'variable_name'].tolist()
+        # extract multi/list question lists from conditions
+        multi_unlinked_vars = df_questionnaires.loc[unlinked_mask, 'variable_name'].tolist()
+        multi_linked_vars = df_questionnaires.loc[linked_mask, 'variable_name'].tolist()
+        list_vars = df_questionnaires.loc[list_mask, 'variable_name'].tolist()
+        gps_vars = df_questionnaires.loc[gps_mask, 'variable_name'].tolist()
 
     # Iterate over each file
     all_dfs = []
@@ -188,14 +191,16 @@ def get_microdata(survey_path, df_questionnaires, survey_name, survey_version):
         else:
             df = pd.read_csv(os.path.join(survey_path, file_name), sep='\t')
 
+
         # drop system-generated columns
         df.drop(columns=[col for col in drop_list if col in df.columns], inplace=True)
 
         # transform multi/list questions
-        df = transform_multi(df, multi_unlinked_vars, 'unlinked')
-        df = transform_multi(df, multi_linked_vars, 'linked')
-        df = transform_multi(df, list_vars, 'list')
-        df = transform_multi(df, gps_vars, 'gps')
+        if df_questionnaires.empty is False:
+            df = transform_multi(df, multi_unlinked_vars, 'unlinked')
+            df = transform_multi(df, multi_linked_vars, 'linked')
+            df = transform_multi(df, list_vars, 'list')
+            df = transform_multi(df, gps_vars, 'gps')
 
         # create roster_level from __id columns if on roster level, else '' if main questionnaire file
         roster_ids = [col for col in df.columns if col.endswith("__id") and col != "interview__id"]
@@ -240,6 +245,9 @@ def get_microdata(survey_path, df_questionnaires, survey_name, survey_version):
 
     # Normalize columns
     combined_df.columns = [normalize_column_name(c) for c in combined_df.columns]
+    
+    # Set value column to string for type compatibility
+    combined_df['value'] = combined_df['value'].astype(str)
     return combined_df
 
 
@@ -421,7 +429,7 @@ def get_paradata(survey_path, df_questionnaires, survey_name, survey_version):
     df_para = set_survey_name_version(df_para, survey_name, survey_version)
 
     if df_questionnaires.empty is False:
-        q_columns = ['qnr_seq', 'variable_name', 'type', 'question_type', 'answers', 'question_scope',
+        q_columns = ['qnr_seq', 'variable_name', "type", 'question_type', 'answers', 'question_scope',
                      'yes_no_view', 'is_filtered_combobox',
                      'is_integer', 'cascade_from_question_id', 'answer_sequence', 'n_answers', 'question_sequence',
                      'survey_name', 'survey_version']

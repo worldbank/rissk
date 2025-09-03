@@ -1,11 +1,11 @@
-hydra-core>=1.3.2
-numpy>=1.24.4
-pandas>=2.0.3
-openpyxl>=3.1.2
-scikit-learn>=1.3.0
-scipy>=1.10.1
-seaborn>=0.12.2
-pyod>=1.1.0
-pythresh>=0.3.3
+hydra-core<=1.3.2
+numpy<=1.24.4
+pandas<=2.0.3
+openpyxl<=3.1.2
+scikit-learn<=1.3.0
+scipy<=1.10.1
+seaborn<=0.12.2
+pyod<=1.1.0
+pythresh<=0.3.3
 
 

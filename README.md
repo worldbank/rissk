@@ -18,8 +18,9 @@ RISSK utilizes machine learning algorithms to generate a **Unit Risk Score (URS)
 These instructions will guide you on how to install and run RISSK on your local machine.
 
 ## Prerequisites
-    
-Make sure you have Python 3.8 or higher installed on your machine. You can verify this by running:
+
+Make sure you have **Python ≥3.8 and ≤3.11** installed on your machine.  
+You can verify this by running:
 
 ```shell
 python --version
